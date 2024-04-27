@@ -15,6 +15,8 @@
 		48B863702BDCF6D400C22D4D /* RxCocoa in Frameworks */ = {isa = PBXBuildFile; productRef = 48B8636F2BDCF6D400C22D4D /* RxCocoa */; };
 		48B863722BDCF6D400C22D4D /* RxRelay in Frameworks */ = {isa = PBXBuildFile; productRef = 48B863712BDCF6D400C22D4D /* RxRelay */; };
 		48B863742BDCF6D400C22D4D /* RxSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 48B863732BDCF6D400C22D4D /* RxSwift */; };
+		48B863782BDCF81F00C22D4D /* AudioConfigurationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48B863772BDCF81F00C22D4D /* AudioConfigurationManager.swift */; };
+		48B8637A2BDCF83F00C22D4D /* VirtualAssistant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48B863792BDCF83F00C22D4D /* VirtualAssistant.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -23,6 +25,8 @@
 		482556A02BDCD1AE00E79028 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		482556A22BDCD1AF00E79028 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		482556A52BDCD1AF00E79028 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		48B863772BDCF81F00C22D4D /* AudioConfigurationManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AudioConfigurationManager.swift; sourceTree = "<group>"; };
+		48B863792BDCF83F00C22D4D /* VirtualAssistant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualAssistant.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -61,8 +65,10 @@
 			children = (
 				4825569E2BDCD1AE00E79028 /* iOSAudioApp.swift */,
 				482556A02BDCD1AE00E79028 /* ContentView.swift */,
+				48B863772BDCF81F00C22D4D /* AudioConfigurationManager.swift */,
 				482556A22BDCD1AF00E79028 /* Assets.xcassets */,
 				482556A42BDCD1AF00E79028 /* Preview Content */,
+				48B863792BDCF83F00C22D4D /* VirtualAssistant.swift */,
 			);
 			path = iOSAudio;
 			sourceTree = "<group>";
@@ -154,7 +160,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				48B863782BDCF81F00C22D4D /* AudioConfigurationManager.swift in Sources */,
 				482556A12BDCD1AE00E79028 /* ContentView.swift in Sources */,
+				48B8637A2BDCF83F00C22D4D /* VirtualAssistant.swift in Sources */,
 				4825569F2BDCD1AE00E79028 /* iOSAudioApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -292,6 +300,7 @@
 				DEVELOPMENT_TEAM = BL5X4YY2A6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Нам нужен ваш микрофон для работы виртуального помощника";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -322,6 +331,7 @@
 				DEVELOPMENT_TEAM = BL5X4YY2A6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Нам нужен ваш микрофон для работы виртуального помощника";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
