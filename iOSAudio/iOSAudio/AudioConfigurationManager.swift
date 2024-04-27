@@ -25,6 +25,7 @@ enum MicrophonePermission {
         case .undetermined: self = .undetermined
         case .denied: self = .denied
         case .granted: self = .granted
+        @unknown default: self = .denied
         }
     }
 }
@@ -42,7 +43,7 @@ final class AudioConfigurationManager {
     private func configure(observer: @escaping (AudioConfigurationResult) -> Void) {
         do {
             try audioSession.setActive(true)
-            try audioSession.setCategory(.playAndRecord)
+            try audioSession.setCategory(.playAndRecord, mode: .default)
             audioSession.requestRecordPermission { [weak audioSession] granted in
                 guard let audioSession else { return }
                 if granted {
