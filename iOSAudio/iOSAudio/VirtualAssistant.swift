@@ -13,8 +13,9 @@ struct VirtualAssistant: View {
 
     var body: some View {
         VStack {
-            Text(vm.configured)
+            Text(vm.configurationStatus)
                 .font(.largeTitle)
+                .padding()
 
             Button(action: {
                 vm.configure()
@@ -29,7 +30,7 @@ final class VirtualAssistantVM: ObservableObject {
     private var disposeBag = DisposeBag()
     private let configurationManager = AudioConfigurationManager()
 
-    @Published var configured = "None"
+    @Published var configurationStatus = "None"
 
     func configure() {
         configurationManager.configure()
@@ -37,11 +38,11 @@ final class VirtualAssistantVM: ObservableObject {
             .subscribe(with: self) { vm, result in
                 switch result {
                 case .audioSessionConfigured:
-                    vm.configured = "Configured!"
+                    vm.configurationStatus = "Configured!"
                 case let .microphonePermissionDenied(status):
-                    vm.configured = "\(status)"
+                    vm.configurationStatus = "\(status)"
                 case let .failedToConfigure(error):
-                    vm.configured = error.localizedDescription
+                    vm.configurationStatus = error.localizedDescription
                 }
             }
             .disposed(by: disposeBag)
