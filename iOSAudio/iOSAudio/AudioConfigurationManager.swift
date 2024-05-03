@@ -42,8 +42,8 @@ final class AudioConfigurationManager {
 
     private func configure(observer: @escaping (AudioConfigurationResult) -> Void) {
         do {
-            try audioSession.setActive(true)
             try audioSession.setCategory(.playAndRecord, mode: .default)
+            try audioSession.setActive(true)
             audioSession.requestRecordPermission { [weak audioSession] granted in
                 guard let audioSession else { return }
                 if granted {

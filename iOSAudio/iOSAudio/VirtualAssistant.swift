@@ -12,16 +12,60 @@ struct VirtualAssistant: View {
     @StateObject private var vm = VirtualAssistantVM()
 
     var body: some View {
-        VStack {
-            Text(vm.configurationStatus)
-                .font(.largeTitle)
-                .padding()
+        if vm.configurationIsInProgress {
+            AssistantConfiguringView()
+                .onAppear(perform: vm.configure)
+        } else if !vm.configuredSuccessfuly {
+            AssistantConfigurationFailedView(vm: vm)
+        } else {
+            AssistantView(vm: vm)
+        }
+    }
+}
 
-            Button(action: {
+private struct AssistantConfiguringView: View {
+    var body: some View {
+        VStack {
+            Text("Configuration is in progress")
+            ProgressView()
+        }
+    }
+}
+
+private struct AssistantConfigurationFailedView: View {
+    @ObservedObject var vm: VirtualAssistantVM
+
+    var body: some View {
+        VStack {
+            Text("Configuration failed")
+
+            Button("Try again") {
+                vm.configurationIsInProgress = true
+                vm.configuredSuccessfuly = false
                 vm.configure()
-            }, label: {
-                Text("Configure AudioSession")
-            })
+            }
+        }
+    }
+}
+
+private struct AssistantView: View {
+    @ObservedObject var vm: VirtualAssistantVM
+
+    var body: some View {
+        VStack {
+            if vm.recordingInProgress {
+                Text("Recording in progress")
+            }
+            
+            Button(vm.recordingInProgress ? "Stop recording" : "Start recording") {
+                if vm.recordingInProgress {
+                    vm.finishRecording()
+                } else {
+                    vm.startRecording()
+                }
+            }
+
+            Button("Play record", action: vm.play)
         }
     }
 }
@@ -29,23 +73,46 @@ struct VirtualAssistant: View {
 final class VirtualAssistantVM: ObservableObject {
     private var disposeBag = DisposeBag()
     private let configurationManager = AudioConfigurationManager()
+    private let recorderManager = AudioRecorderManager()
+    private let playerManager = AudioPlayerManager()
 
-    @Published var configurationStatus = "None"
+    @Published var configurationIsInProgress = true
+    @Published var configuredSuccessfuly = false
+    @Published var recordingInProgress = false
+    var configurationStatus = ""
 
     func configure() {
         configurationManager.configure()
             .observe(on: MainScheduler.asyncInstance)
             .subscribe(with: self) { vm, result in
-                switch result {
-                case .audioSessionConfigured:
-                    vm.configurationStatus = "Configured!"
-                case let .microphonePermissionDenied(status):
-                    vm.configurationStatus = "\(status)"
-                case let .failedToConfigure(error):
-                    vm.configurationStatus = error.localizedDescription
+                if case .audioSessionConfigured = result {
+                    vm.configuredSuccessfuly = true
+                } else {
+                    vm.configuredSuccessfuly = false
                 }
+                vm.configurationStatus = "\(result)"
+                vm.configurationIsInProgress = false
             }
             .disposed(by: disposeBag)
+    }
+
+    func startRecording() {
+        do {
+            try recorderManager.start()
+            recordingInProgress = true
+        } catch {
+            print(error.localizedDescription)
+            recordingInProgress = false
+        }
+    }
+
+    func finishRecording() {
+        recorderManager.stop()
+        recordingInProgress = false
+    }
+
+    func play() {
+        playerManager.play()
     }
 }
 
