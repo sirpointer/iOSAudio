@@ -7,6 +7,7 @@
 
 import SwiftUI
 import RxSwift
+import AVFAudio
 
 struct VirtualAssistant: View {
     @StateObject private var vm = VirtualAssistantVM()
@@ -87,6 +88,8 @@ final class VirtualAssistantVM: ObservableObject {
             .subscribe(with: self) { vm, result in
                 if case .audioSessionConfigured = result {
                     vm.configuredSuccessfuly = true
+                    vm.recorderManager.setupEngine()
+                    vm.subscribeOnRecorder()
                 } else {
                     vm.configuredSuccessfuly = false
                 }
@@ -96,14 +99,25 @@ final class VirtualAssistantVM: ObservableObject {
             .disposed(by: disposeBag)
     }
 
+    private func subscribeOnRecorder() {
+        recorderManager.outputData
+            .subscribe(with: self) { vm, data in
+                switch data {
+                case let .streaming(buffer, time):
+                    let filePath = FileManagerHelper.getFileURL(for: FileManagerHelper.filename)
+                    vm.recorderManager.writePCMBuffer(buffer: buffer, output: filePath)
+                case let .converted(data, time):
+                    break
+                default:
+                    break
+                }
+            }.disposed(by: disposeBag)
+    }
+
     func startRecording() {
-        do {
-            try recorderManager.start()
-            recordingInProgress = true
-        } catch {
-            print(error.localizedDescription)
-            recordingInProgress = false
-        }
+        FileManagerHelper.removeFile(from: .recordingURL)
+        recorderManager.start()
+        recordingInProgress = true
     }
 
     func finishRecording() {
@@ -113,6 +127,57 @@ final class VirtualAssistantVM: ObservableObject {
 
     func play() {
         playerManager.play()
+    }
+}
+
+private extension VirtualAssistantVM {
+    func audioEngineStreaming(buffer: AVAudioPCMBuffer, time: AVAudioTime) {
+        recorderManager.writePCMBuffer(buffer: buffer, output: .recordingURL)
+    }
+
+    private func fileSize(fromPath url: URL) -> String? {
+        let path = url.path
+
+        guard let size = try? FileManager.default.attributesOfItem(atPath: path)[FileAttributeKey.size],
+              let fileSize = size as? UInt64 else {
+            return nil
+        }
+
+        // bytes
+        if fileSize < 1023 {
+            return String(format: "%lu bytes", CUnsignedLong(fileSize))
+        }
+        // KB
+        var floatSize = Float(fileSize / 1024)
+        if floatSize < 1023 {
+            return String(format: "%.1f KB", floatSize)
+        }
+        // MB
+        floatSize = floatSize / 1024
+        if floatSize < 1023 {
+            return String(format: "%.1f MB", floatSize)
+        }
+        // GB
+        floatSize = floatSize / 1024
+        return String(format: "%.1f GB", floatSize)
+    }
+
+    struct FileManagerHelper {
+        static let filename = "audio.wav"
+
+        static func getDocumentsDirectory() -> URL {
+            let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+            return paths[0]
+        }
+
+        static func getFileURL(for fileName: String) -> URL {
+            let path = getDocumentsDirectory().appendingPathComponent(fileName)
+            return path as URL
+        }
+
+        static func removeFile(from url: URL) {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 }
 
