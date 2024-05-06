@@ -88,6 +88,7 @@ final class VirtualAssistantVM: ObservableObject {
     var configurationStatus = ""
 
     func configure() {
+        print(URL.recordingURL.absoluteString)
         configurationManager.configure()
             .observe(on: MainScheduler.asyncInstance)
             .subscribe(with: self) { vm, result in
@@ -108,7 +109,7 @@ final class VirtualAssistantVM: ObservableObject {
         recorderManager.outputData
             .subscribe(with: self) { vm, data in
                 switch data {
-                case let .streaming(buffer):
+                case let .soundCaptured(buffer):
                     vm.writePCMBuffer(buffer: buffer, output: .recordingURL)
                 case .converted:
                     break
@@ -145,7 +146,7 @@ private extension VirtualAssistantVM {
 
         do {
             if outputFile == nil {
-                outputFile = try AVAudioFile(forWriting: output, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+                outputFile = try AVAudioFile(forWriting: output, settings: settings, commonFormat: .pcmFormatInt16, interleaved: false)
                 print("[AudioEngine]: Audio file created.")
             }
             try outputFile?.write(from: buffer)

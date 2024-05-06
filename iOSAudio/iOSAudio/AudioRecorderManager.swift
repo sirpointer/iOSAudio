@@ -34,7 +34,7 @@ final class AudioRecorderManager: NSObject {
     }
 
     var outputData: Observable<AudioRecorderData> { dataPublisher }
-    private (set) var status: EngineStatus = .notInitialized
+    private(set) var status: EngineStatus = .notInitialized
     private(set) var streamingInProgress: Bool = false
 
     init(sampleRate: Int = 16000, numberOfChannels: UInt32 = 1, audioFormat: AVAudioCommonFormat = .pcmFormatInt16) {
@@ -85,7 +85,7 @@ final class AudioRecorderManager: NSObject {
         }
 
         var error: NSError?
-        let inputBlock: AVAudioConverterInputBlock = { [weak buffer] _, outStatus in
+        let inputBlock: AVAudioConverterInputBlock = { _, outStatus in
             outStatus.pointee = .haveData
             return buffer
         }
@@ -93,7 +93,7 @@ final class AudioRecorderManager: NSObject {
 
         switch status {
         case .haveData:
-            publish(.soundCaptured(buffer: buffer))
+            publish(.soundCaptured(buffer: convertedBuffer))
 
             let arraySize = Int(buffer.frameLength)
             guard let start = convertedBuffer.floatChannelData?[0] else { return }
@@ -102,6 +102,9 @@ final class AudioRecorderManager: NSObject {
                 streamingInProgress = true
                 publish(.started)
             }
+
+//            let data = Data(buffer: .init(start: &samples, count: samples.count))
+
             publish(.converted(data: samples, time: time))
 
             /*
