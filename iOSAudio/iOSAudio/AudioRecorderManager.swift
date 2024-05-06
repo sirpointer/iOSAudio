@@ -12,7 +12,7 @@ import RxSwift
 enum AudioRecorderData {
     case failure(AudioRecorderManager.AudioEngineError)
     case started
-    case streaming(buffer: AVAudioPCMBuffer)
+    case soundCaptured(buffer: AVAudioPCMBuffer)
     case converted(data: [Float], time: Float64)
 }
 
@@ -93,7 +93,7 @@ final class AudioRecorderManager: NSObject {
 
         switch status {
         case .haveData:
-            publish(.streaming(buffer: buffer))
+            publish(.soundCaptured(buffer: buffer))
 
             let arraySize = Int(buffer.frameLength)
             guard let start = convertedBuffer.floatChannelData?[0] else { return }
