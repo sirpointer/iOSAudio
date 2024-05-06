@@ -103,6 +103,19 @@ final class AudioRecorderManager: NSObject {
                 publish(.started)
             }
             publish(.converted(data: samples, time: time))
+
+            /*
+            if let channelData = convertedBuffer.int16ChannelData {
+
+                let channelDataPointer = channelData.pointee
+                let channelData = stride(
+                    from: 0,
+                    to: Int(convertedBuffer.frameLength),
+                    by: buffer.stride
+                )
+                    .map { channelDataPointer[$0] }
+            }
+            */
         case .error:
             if let error {
                 streamingInProgress = false
