@@ -35,8 +35,7 @@ final class AudioRecorderManager: NSObject {
 
     var outputData: Observable<AudioRecorderData> { dataPublisher }
     private (set) var status: EngineStatus = .notInitialized
-
-    private var streamingInProgress: Bool = false
+    private(set) var streamingInProgress: Bool = false
 
     init(sampleRate: Int = 16000, numberOfChannels: UInt32 = 1, audioFormat: AVAudioCommonFormat = .pcmFormatInt16) {
         self.sampleRate = sampleRate
