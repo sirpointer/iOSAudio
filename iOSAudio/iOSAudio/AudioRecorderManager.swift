@@ -94,6 +94,7 @@ final class AudioRecorderManager: NSObject {
         switch status {
         case .haveData:
             publish(.streaming(buffer: buffer))
+
             let arraySize = Int(buffer.frameLength)
             guard let start = convertedBuffer.floatChannelData?[0] else { return }
             let samples = Array(UnsafeBufferPointer(start: start, count: arraySize))
