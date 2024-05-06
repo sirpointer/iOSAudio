@@ -74,8 +74,13 @@ private struct AssistantView: View {
 final class VirtualAssistantVM: ObservableObject {
     private var disposeBag = DisposeBag()
     private let configurationManager = AudioConfigurationManager()
-    private let recorderManager = AudioRecorderManager()
+
+    private let sampleRate: Int = 16000
+    private lazy var recorderManager = AudioRecorderManager(sampleRate: sampleRate)
+
     private let playerManager = AudioPlayerManager()
+    
+    private var outputFile: AVAudioFile?
 
     @Published var configurationIsInProgress = true
     @Published var configuredSuccessfuly = false
@@ -103,10 +108,9 @@ final class VirtualAssistantVM: ObservableObject {
         recorderManager.outputData
             .subscribe(with: self) { vm, data in
                 switch data {
-                case let .streaming(buffer, time):
-                    let filePath = FileManagerHelper.getFileURL(for: FileManagerHelper.filename)
-                    vm.recorderManager.writePCMBuffer(buffer: buffer, output: filePath)
-                case let .converted(data, time):
+                case let .streaming(buffer):
+                    vm.writePCMBuffer(buffer: buffer, output: .recordingURL)
+                case .converted:
                     break
                 default:
                     break
@@ -115,7 +119,7 @@ final class VirtualAssistantVM: ObservableObject {
     }
 
     func startRecording() {
-        FileManagerHelper.removeFile(from: .recordingURL)
+        try? FileManager.default.removeItem(at: .recordingURL)
         recorderManager.start()
         recordingInProgress = true
     }
@@ -131,8 +135,24 @@ final class VirtualAssistantVM: ObservableObject {
 }
 
 private extension VirtualAssistantVM {
-    func audioEngineStreaming(buffer: AVAudioPCMBuffer, time: AVAudioTime) {
-        recorderManager.writePCMBuffer(buffer: buffer, output: .recordingURL)
+    func writePCMBuffer(buffer: AVAudioPCMBuffer, output: URL) {
+        let settings: [String: Any] = [
+            AVFormatIDKey: buffer.format.settings[AVFormatIDKey] ?? kAudioFormatLinearPCM,
+            AVNumberOfChannelsKey: buffer.format.settings[AVNumberOfChannelsKey] ?? 1,
+            AVSampleRateKey: buffer.format.settings[AVSampleRateKey] ?? sampleRate,
+            AVLinearPCMBitDepthKey: buffer.format.settings[AVLinearPCMBitDepthKey] ?? 16
+        ]
+
+        do {
+            if outputFile == nil {
+                outputFile = try AVAudioFile(forWriting: output, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+                print("[AudioEngine]: Audio file created.")
+            }
+            try outputFile?.write(from: buffer)
+            print("[AudioEngine]: Writing buffer into the file...")
+        } catch {
+            print("[AudioEngine]: Failed to write into the file.")
+        }
     }
 
     private func fileSize(fromPath url: URL) -> String? {
@@ -161,23 +181,13 @@ private extension VirtualAssistantVM {
         floatSize = floatSize / 1024
         return String(format: "%.1f GB", floatSize)
     }
+}
 
-    struct FileManagerHelper {
-        static let filename = "audio.wav"
-
-        static func getDocumentsDirectory() -> URL {
-            let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-            return paths[0]
-        }
-
-        static func getFileURL(for fileName: String) -> URL {
-            let path = getDocumentsDirectory().appendingPathComponent(fileName)
-            return path as URL
-        }
-
-        static func removeFile(from url: URL) {
-            try? FileManager.default.removeItem(at: url)
-        }
+extension URL {
+    static var recordingURL: URL {
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        let whistleURL = paths[0].appendingPathComponent("tempRecording")
+        return whistleURL
     }
 }
 

@@ -12,35 +12,21 @@ import RxSwift
 enum AudioRecorderData {
     case failure(AudioRecorderManager.AudioEngineError)
     case started
-    case streaming(buffer: AVAudioPCMBuffer, time: AVAudioTime)
+    case streaming(buffer: AVAudioPCMBuffer)
     case converted(data: [Float], time: Float64)
 }
 
 final class AudioRecorderManager: NSObject {
-
-    enum AudioEngineError: Error, LocalizedError {
-        case converterMissing
-        case cannotCreatePcmBuffer
-        case noInputChannel
-        case internalError(Error)
-    }
-
-    enum EngineStatus {
-        case notInitialized
-        case ready
-        case recording
-        case paused
-        case failed
-    }
-
-    var player = AVAudioPlayerNode()
     private let engine = AVAudioEngine()
     private var converter: AVAudioConverter?
-    private var outputFile: AVAudioFile?
+
+    private let inputBus: AVAudioNodeBus = 0
+    private let outputBus: AVAudioNodeBus = 0
+    private let bufferSize: AVAudioFrameCount = 1024
 
     let sampleRate: Int
     let numberOfChannels: UInt32
-    let audioQuality: Int
+    let audioFormat: AVAudioCommonFormat
 
     private let dataPublisher = PublishSubject<AudioRecorderData>()
     private func publish(_ value: AudioRecorderData) {
@@ -50,16 +36,12 @@ final class AudioRecorderManager: NSObject {
     var outputData: Observable<AudioRecorderData> { dataPublisher }
     private (set) var status: EngineStatus = .notInitialized
 
-    private let inputBus: AVAudioNodeBus = 0
-    private let outputBus: AVAudioNodeBus = 0
-    private let bufferSize: AVAudioFrameCount = 1024
-
     private var streamingInProgress: Bool = false
 
-    init(sampleRate: Int = 16000, numberOfChannels: Int = 1, audioQuality: Int = 16) {
+    init(sampleRate: Int = 16000, numberOfChannels: UInt32 = 1, audioFormat: AVAudioCommonFormat = .pcmFormatInt16) {
         self.sampleRate = sampleRate
-        self.numberOfChannels = UInt32(numberOfChannels)
-        self.audioQuality = audioQuality
+        self.numberOfChannels = numberOfChannels
+        self.audioFormat = audioFormat
     }
 
     func setupEngine() {
@@ -79,20 +61,9 @@ final class AudioRecorderManager: NSObject {
     }
 
     private func setupConverter(inputFormat: AVAudioFormat) {
-        let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatFLAC),
-            AVSampleRateKey: sampleRate,
-            AVNumberOfChannelsKey: numberOfChannels,
-            AVEncoderAudioQualityKey: audioQuality
-        ]
-
-        if let outputFormat = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: Double(sampleRate), channels: 1, interleaved: false) {
+        if let outputFormat = AVAudioFormat(commonFormat: audioFormat, sampleRate: Double(sampleRate), channels: numberOfChannels, interleaved: false) {
             converter = AVAudioConverter(from: inputFormat, to: outputFormat)
         }
-
-//        if let outputFormat = AVAudioFormat(settings: settings) {
-//            converter = AVAudioConverter(from: inputFormat, to: outputFormat)
-//        }
     }
 
     private func convert(buffer: AVAudioPCMBuffer, time: Float64) {
@@ -123,7 +94,7 @@ final class AudioRecorderManager: NSObject {
 
         switch status {
         case .haveData:
-            publish(.streaming(buffer: buffer, time: AVAudioTime()))
+            publish(.streaming(buffer: buffer))
             let arraySize = Int(buffer.frameLength)
             guard let start = convertedBuffer.floatChannelData?[0] else { return }
             let samples = Array(UnsafeBufferPointer(start: start, count: arraySize))
@@ -178,7 +149,6 @@ final class AudioRecorderManager: NSObject {
 
     func stop() { 
         engine.stop()
-//        outputFile = nil
         engine.reset()
         engine.inputNode.removeTap(onBus: inputBus)
         setupEngine()
@@ -186,31 +156,17 @@ final class AudioRecorderManager: NSObject {
 }
 
 extension AudioRecorderManager {
-    func writePCMBuffer(buffer: AVAudioPCMBuffer, output: URL) {
-        let settings: [String: Any] = [
-            AVFormatIDKey: buffer.format.settings[AVFormatIDKey] ?? kAudioFormatLinearPCM,
-            AVNumberOfChannelsKey: buffer.format.settings[AVNumberOfChannelsKey] ?? 1,
-            AVSampleRateKey: buffer.format.settings[AVSampleRateKey] ?? sampleRate,
-            AVLinearPCMBitDepthKey: buffer.format.settings[AVLinearPCMBitDepthKey] ?? 16
-        ]
-
-        do {
-            if outputFile == nil {
-                outputFile = try AVAudioFile(forWriting: output, settings: settings, commonFormat: .pcmFormatFloat32, interleaved: false)
-                print("[AudioEngine]: Audio file created.")
-            }
-            try outputFile?.write(from: buffer)
-            print("[AudioEngine]: Writing buffer into the file...")
-        } catch {
-            print("[AudioEngine]: Failed to write into the file.")
-        }
+    enum AudioEngineError: Error, LocalizedError {
+        case converterMissing
+        case cannotCreatePcmBuffer
+        case noInputChannel
+        case internalError(Error)
     }
-}
 
-extension URL {
-    static var recordingURL: URL {
-        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        let whistleURL = paths[0].appendingPathComponent("tempRecording.flac")
-        return whistleURL
+    enum EngineStatus {
+        case notInitialized
+        case ready
+        case recording
+        case failed
     }
 }
