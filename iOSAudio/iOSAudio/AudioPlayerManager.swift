@@ -14,36 +14,54 @@ final class AudioPlayerManager {
     
     private var engine = AVAudioEngine()
     private var playerNode = AVAudioPlayerNode()
+    private var converter = AVAudioConverter()
 
     let sampleRate: Double
     let numberOfChannels: UInt32
     let audioFormat: AVAudioCommonFormat
+    private var format: AVAudioFormat = .init()
 
-    init(sampleRate: Int = 22000, numberOfChannels: UInt32 = 1, audioFormat: AVAudioCommonFormat = .pcmFormatInt16) {
+    init(sampleRate: Int = 16000, numberOfChannels: UInt32 = 1, audioFormat: AVAudioCommonFormat = .pcmFormatInt16) {
         self.sampleRate = Double(sampleRate)
         self.numberOfChannels = numberOfChannels
         self.audioFormat = audioFormat
 //        self.configureEngine()
     }
 
-    func configureEngine(formatt: AVAudioFormat? = nil) {
+    func configureEngine() {
         playerNode.stop()
         engine.stop()
         playerNode = AVAudioPlayerNode()
         engine = AVAudioEngine()
-        let format = AVAudioFormat(commonFormat: audioFormat, sampleRate: sampleRate, channels: numberOfChannels, interleaved: false)
+
+        guard let inputFormat = AVAudioFormat(commonFormat: audioFormat, sampleRate: sampleRate, channels: numberOfChannels, interleaved: false) else { return }
+        format = inputFormat
         engine.attach(playerNode)
-        engine.connect(playerNode, to: engine.mainMixerNode, format: formatt ?? format)
+        engine.connect(playerNode, to: engine.mainMixerNode, format: nil)
+
+        guard let converter = AVAudioConverter(from: format, to: engine.mainMixerNode.outputFormat(forBus: 0)) else { return }
+        self.converter = converter
+
         engine.prepare()
         try! engine.start()
     }
 
     func play(_ buffer: AVAudioPCMBuffer) -> Single<Void> {
-        Single.create { [weak playerNode] observer in
-            playerNode?.scheduleBuffer(buffer, completionCallbackType: .dataPlayedBack) { _ in
+        Single.create { [weak self] observer in
+            guard let self else { return Disposables.create() }
+            let outputFormat = converter.outputFormat
+            let targetFrameCapacity = AVAudioFrameCount(outputFormat.sampleRate) * buffer.frameLength / AVAudioFrameCount(buffer.format.sampleRate)
+            let outputBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: targetFrameCapacity)!
+
+            converter.convert(to: outputBuffer, error: nil) { _, outStatus in
+                outStatus.pointee = .haveData
+                return buffer
+            }
+
+            playerNode.scheduleBuffer(outputBuffer) {
                 observer(.success(()))
             }
-            playerNode?.play()
+            playerNode.play()
 
             return Disposables.create()
         }

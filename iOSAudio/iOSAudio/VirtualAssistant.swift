@@ -71,16 +71,39 @@ private struct AssistantView: View {
     }
 }
 
+struct Buffer: Identifiable, Comparable {
+    let id = UUID()
+    let buffer: AVAudioPCMBuffer
+    let timestamp: Date
+
+    static func < (lhs: Buffer, rhs: Buffer) -> Bool {
+        lhs.timestamp < rhs.timestamp
+    }
+}
+
 final class VirtualAssistantVM: ObservableObject {
     private var disposeBag = DisposeBag()
     private let configurationManager = AudioConfigurationManager()
 
     private let sampleRate: Int = 16000
-    private lazy var recorderManager = AudioRecorderManager(sampleRate: sampleRate)
+    private let numberOfChannels: UInt32 = 1
+    private let audioFormat: AVAudioCommonFormat = .pcmFormatInt16
 
-    private let playerManager = AudioPlayerManager()
-    
+    private lazy var recorderManager = AudioRecorderManager(
+        sampleRate: sampleRate,
+        numberOfChannels: numberOfChannels,
+        audioFormat: audioFormat
+    )
+
+    private lazy var playerManager = AudioPlayerManager(
+        sampleRate: sampleRate,
+        numberOfChannels: numberOfChannels,
+        audioFormat: audioFormat
+    )
+
     private var outputFile: AVAudioFile?
+
+    private var buffers: [Buffer] = []
 
     @Published var configurationIsInProgress = true
     @Published var configuredSuccessfuly = false
@@ -112,6 +135,7 @@ final class VirtualAssistantVM: ObservableObject {
                 switch data {
                 case let .soundCaptured(buffer):
                     vm.writePCMBuffer(buffer: buffer, output: .recordingURL)
+                    vm.buffers.append(.init(buffer: buffer, timestamp: Date()))
                 case .converted:
                     break
                 default:
@@ -131,7 +155,24 @@ final class VirtualAssistantVM: ObservableObject {
         recordingInProgress = false
     }
 
+    func playBuffers(buffers: [Buffer], needConfigure: Bool = true) {
+        var buffers = buffers.sorted(by: >)
+        guard let firstBuffer = buffers.popLast() else { return }
+        let buffer = firstBuffer.buffer
+        if needConfigure {
+            let format = buffer.format
+            playerManager.configureEngine()
+        }
+        playerManager.play(buffer)
+            .subscribe { [weak self] _ in
+                self?.playBuffers(buffers: buffers, needConfigure: false)
+            }.disposed(by: disposeBag)
+    }
+
     func play() {
+        playBuffers(buffers: buffers, needConfigure: true)
+
+        return
         guard let fileUrl = Bundle.main.url(forResource: "Intro converted", withExtension: "wav") else {
             return
         }
@@ -145,13 +186,13 @@ final class VirtualAssistantVM: ObservableObject {
             let audioSampleRate = format.sampleRate
             let audioLengthSeconds = Double(audioLengthSamples) / audioSampleRate
 
-            guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)) else { return }
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length / 2)) else { return }
             print("Buffer created")
 
             try file.read(into: buffer)
             print("File read into buffer")
 
-            playerManager.configureEngine(formatt: file.processingFormat)
+            playerManager.configureEngine()
             playerManager.play(buffer)
                 .subscribe { _ in
                     print("Done!!!!!!")
