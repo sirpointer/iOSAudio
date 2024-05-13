@@ -96,6 +96,7 @@ final class VirtualAssistantVM: ObservableObject {
                     vm.configuredSuccessfuly = true
                     vm.recorderManager.setupEngine()
                     vm.subscribeOnRecorder()
+//                    vm.playerManager.configureEngine()
                 } else {
                     vm.configuredSuccessfuly = false
                 }
@@ -131,7 +132,40 @@ final class VirtualAssistantVM: ObservableObject {
     }
 
     func play() {
-        playerManager.play()
+        guard let fileUrl = Bundle.main.url(forResource: "Intro converted", withExtension: "wav") else {
+            return
+        }
+
+        do {
+            let file = try AVAudioFile(forReading: fileUrl)
+            print("File read")
+            let format = file.processingFormat
+
+            let audioLengthSamples = file.length
+            let audioSampleRate = format.sampleRate
+            let audioLengthSeconds = Double(audioLengthSamples) / audioSampleRate
+
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)) else { return }
+            print("Buffer created")
+
+            try file.read(into: buffer)
+            print("File read into buffer")
+
+            playerManager.configureEngine(formatt: file.processingFormat)
+            playerManager.play(buffer)
+                .subscribe { _ in
+                    print("Done!!!!!!")
+                }.disposed(by: disposeBag)
+
+//            audioFile = file
+//
+//            configureEngine(with: format)
+        } catch {
+            print("Error reading the audio file: \(error.localizedDescription)")
+        }
+
+
+//        playerManager.play()
     }
 }
 
