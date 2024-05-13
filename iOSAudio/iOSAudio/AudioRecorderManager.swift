@@ -13,7 +13,6 @@ enum AudioRecorderData {
     case failure(AudioRecorderManager.AudioEngineError)
     case started
     case soundCaptured(buffer: AVAudioPCMBuffer)
-    case converted(data: [Float], time: Float64)
 }
 
 final class AudioRecorderManager: NSObject {
@@ -104,23 +103,7 @@ final class AudioRecorderManager: NSObject {
                 publish(.started)
             }
 
-//            let data = Data(buffer: .init(start: &samples, count: samples.count))
-
-            publish(.converted(data: samples, time: time))
             return convertedBuffer
-
-            /*
-            if let channelData = convertedBuffer.int16ChannelData {
-
-                let channelDataPointer = channelData.pointee
-                let channelData = stride(
-                    from: 0,
-                    to: Int(convertedBuffer.frameLength),
-                    by: buffer.stride
-                )
-                    .map { channelDataPointer[$0] }
-            }
-            */
         case .error:
             if let error {
                 streamingInProgress = false
