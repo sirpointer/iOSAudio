@@ -65,13 +65,14 @@ final class AudioRecorderManager: NSObject {
         }
     }
 
-    private func convert(buffer: AVAudioPCMBuffer, time: Float64) {
+    @discardableResult
+    func convert(buffer: AVAudioPCMBuffer, time: Float64) -> AVAudioPCMBuffer? {
         guard let converter else {
             status = .failed
             streamingInProgress = false
             print("[AudioEngine]: Convertor doesn't exist.")
             publish(.failure(.converterMissing))
-            return
+            return nil
         }
         let outputFormat = converter.outputFormat
 
@@ -81,7 +82,7 @@ final class AudioRecorderManager: NSObject {
             streamingInProgress = false
             print("[AudioEngine]: Cannot create AVAudioPCMBuffer.")
             publish(.failure(.cannotCreatePcmBuffer))
-            return
+            return nil
         }
 
         var error: NSError?
@@ -96,7 +97,7 @@ final class AudioRecorderManager: NSObject {
             publish(.soundCaptured(buffer: convertedBuffer))
 
             let arraySize = Int(buffer.frameLength)
-            guard let start = convertedBuffer.floatChannelData?[0] else { return }
+            guard let start = convertedBuffer.floatChannelData?[0] else { return nil }
             let samples = Array(UnsafeBufferPointer(start: start, count: arraySize))
             if !streamingInProgress {
                 streamingInProgress = true
@@ -106,6 +107,7 @@ final class AudioRecorderManager: NSObject {
 //            let data = Data(buffer: .init(start: &samples, count: samples.count))
 
             publish(.converted(data: samples, time: time))
+            return convertedBuffer
 
             /*
             if let channelData = convertedBuffer.int16ChannelData {
@@ -139,6 +141,7 @@ final class AudioRecorderManager: NSObject {
             }
             print("[AudioEngine]: Unknown converter error")
         }
+        return nil
     }
 
     func start() {
