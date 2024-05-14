@@ -20,8 +20,8 @@ final class AudioPlayerManager {
     let numberOfChannels: UInt32
     let commonFormat: AVAudioCommonFormat
 
-    init(sampleRate: Int = 16000, numberOfChannels: UInt32 = 1, commonFormat: AVAudioCommonFormat = .pcmFormatInt16) {
-        self.sampleRate = Double(sampleRate)
+    init(sampleRate: Double = 16000, numberOfChannels: UInt32 = 1, commonFormat: AVAudioCommonFormat = .pcmFormatInt16) {
+        self.sampleRate = sampleRate
         self.numberOfChannels = numberOfChannels
         self.commonFormat = commonFormat
     }

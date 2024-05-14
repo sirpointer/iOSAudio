@@ -31,7 +31,7 @@ enum MicrophonePermission {
 }
 
 final class AudioConfigurationManager {
-    let audioSession = AVAudioSession.sharedInstance()
+    private let audioSession = AVAudioSession.sharedInstance()
 
     func configure() -> Single<AudioConfigurationResult> {
         Single<AudioConfigurationResult>.create { [weak self] observer in

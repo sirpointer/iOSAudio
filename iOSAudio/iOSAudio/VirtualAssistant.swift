@@ -83,12 +83,12 @@ struct Buffer: Identifiable, Comparable {
 
 final class VirtualAssistantVM: ObservableObject {
     private var disposeBag = DisposeBag()
-    private let configurationManager = AudioConfigurationManager()
 
-    private let sampleRate: Int = 16000
+    private let sampleRate: Double = 16000
     private let numberOfChannels: UInt32 = 1
     private let commonFormat: AVAudioCommonFormat = .pcmFormatInt16
 
+    private let configurationManager = AudioConfigurationManager()
     private lazy var recorderManager = AudioRecorderManager(
         sampleRate: sampleRate,
         numberOfChannels: numberOfChannels,
