@@ -87,18 +87,18 @@ final class VirtualAssistantVM: ObservableObject {
 
     private let sampleRate: Int = 16000
     private let numberOfChannels: UInt32 = 1
-    private let audioFormat: AVAudioCommonFormat = .pcmFormatInt16
+    private let commonFormat: AVAudioCommonFormat = .pcmFormatInt16
 
     private lazy var recorderManager = AudioRecorderManager(
         sampleRate: sampleRate,
         numberOfChannels: numberOfChannels,
-        audioFormat: audioFormat
+        commonFormat: commonFormat
     )
 
     private lazy var playerManager = AudioPlayerManager(
         sampleRate: sampleRate,
         numberOfChannels: numberOfChannels,
-        audioFormat: audioFormat
+        commonFormat: commonFormat
     )
 
     private var outputFile: AVAudioFile?
@@ -116,9 +116,7 @@ final class VirtualAssistantVM: ObservableObject {
             .subscribe(with: self) { vm, result in
                 if case .audioSessionConfigured = result {
                     vm.configuredSuccessfuly = true
-                    vm.recorderManager.setupEngine()
-                    vm.subscribeOnRecorder()
-//                    vm.playerManager.configureEngine()
+                    vm.setupEngines()
                 } else {
                     vm.configuredSuccessfuly = false
                 }
@@ -140,6 +138,16 @@ final class VirtualAssistantVM: ObservableObject {
             }.disposed(by: disposeBag)
     }
 
+    private func setupEngines() {
+        do {
+            try recorderManager.setupEngine()
+            try playerManager.configureEngine()
+            subscribeOnRecorder()
+        } catch {
+            configurationStatus = error.localizedDescription
+        }
+    }
+
     func startRecording() {
         buffers.removeAll()
         recorderManager.start()
@@ -147,25 +155,36 @@ final class VirtualAssistantVM: ObservableObject {
     }
 
     func finishRecording() {
-        recorderManager.stop()
-        recordingInProgress = false
+        do {
+            try recorderManager.stop()
+            recordingInProgress = false
+        } catch {
+            self.configurationStatus = "\(error.localizedDescription)"
+            recordingInProgress = false
+        }
     }
 
     func playBuffers(buffers: [Buffer], needConfigure: Bool = true) {
         var buffers = buffers.sorted(by: >)
         guard let firstBuffer = buffers.popLast() else { return }
-        let buffer = firstBuffer.buffer
-        if needConfigure {
-            playerManager.configureEngine()
-        }
-        playerManager.play(buffer)
+
+        playerManager.play(firstBuffer.buffer)
             .subscribe { [weak self] _ in
                 self?.playBuffers(buffers: buffers, needConfigure: false)
-            }.disposed(by: disposeBag)
+            } onFailure: { [weak self] error in
+                self?.configurationStatus = "\(error.localizedDescription)"
+            }
+            .disposed(by: disposeBag)
     }
 
     func play() {
         playBuffers(buffers: buffers, needConfigure: true)
+    }
+}
+
+extension AVAudioFormat {
+    func getTargetFrameCapacity(for buffer: AVAudioPCMBuffer) -> AVAudioFrameCount {
+        AVAudioFrameCount(sampleRate) * buffer.frameLength / AVAudioFrameCount(buffer.format.sampleRate)
     }
 }
 

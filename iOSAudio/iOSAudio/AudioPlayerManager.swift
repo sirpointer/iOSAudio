@@ -10,7 +10,7 @@ import AVFoundation
 import RxSwift
 
 final class AudioPlayerManager {
-    private var engine = AVAudioEngine()
+    private let engine = AVAudioEngine()
     private var playerNode = AVAudioPlayerNode()
     private var converter = AVAudioConverter()
 
@@ -28,9 +28,8 @@ final class AudioPlayerManager {
 
     func configureEngine() throws {
         playerNode.stop()
-        engine.stop()
+        engine.reset()
         playerNode = AVAudioPlayerNode()
-        engine = AVAudioEngine()
 
         guard let inputFormat = AVAudioFormat(commonFormat: commonFormat, sampleRate: sampleRate, channels: numberOfChannels, interleaved: false) else {
             throw AudioPlayerManagerError.incorrectInputFormat
@@ -62,23 +61,31 @@ final class AudioPlayerManager {
 
     private func playBuffer(_ buffer: AVAudioPCMBuffer, observer: @escaping (Result<Void, Error>) -> Void) {
         let outputFormat = converter.outputFormat
-        let targetFrameCapacity = AVAudioFrameCount(outputFormat.sampleRate) * buffer.frameLength / AVAudioFrameCount(buffer.format.sampleRate)
+
+        let targetFrameCapacity = outputFormat.getTargetFrameCapacity(for: buffer)
 
         guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: targetFrameCapacity) else {
             observer(.failure(AudioPlayerManagerError.cannotCreateOutputBuffer))
             return
         }
 
-        converter.convert(to: outputBuffer, error: nil) { _, outStatus in
+        var error: NSError?
+        let status = converter.convert(to: outputBuffer, error: &error) { _, outStatus in
             outStatus.pointee = .haveData
             return buffer
         }
 
-        playerNode.scheduleBuffer(outputBuffer) {
-            observer(.success(()))
+        switch status {
+        case .haveData:
+            playerNode.scheduleBuffer(outputBuffer) {
+                observer(.success(()))
+            }
+            playerNode.play()
+        case .error:
+            observer(.failure(AudioPlayerManagerError.converterFailure(error)))
+        default:
+            break
         }
-        
-        playerNode.play()
     }
 }
 
@@ -87,4 +94,5 @@ enum AudioPlayerManagerError: LocalizedError {
     case cannotConfigureConverter
     case engineStartFailure(Error)
     case cannotCreateOutputBuffer
+    case converterFailure(Error?)
 }

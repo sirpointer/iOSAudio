@@ -10,9 +10,18 @@ import AVFoundation
 import RxSwift
 
 enum AudioRecorderData {
-    case failure(AudioRecorderManager.AudioEngineError)
+    case failure(AudioRecorderManagerError)
     case started
     case soundCaptured(buffer: AVAudioPCMBuffer)
+}
+
+enum AudioRecorderManagerError: LocalizedError {
+    case converterMissing
+    case cannotCreatePcmBuffer
+    case noInputChannel
+    case internalError(Error)
+    case engineStartFailure(Error)
+    case cannotCreateConverter
 }
 
 final class AudioRecorderManager: NSObject {
@@ -23,9 +32,9 @@ final class AudioRecorderManager: NSObject {
     private let outputBus: AVAudioNodeBus = 0
     private let bufferSize: AVAudioFrameCount = 1024
 
-    let sampleRate: Int
+    let sampleRate: Double
     let numberOfChannels: UInt32
-    let audioFormat: AVAudioCommonFormat
+    let commonFormat: AVAudioCommonFormat
 
     private let dataPublisher = PublishSubject<AudioRecorderData>()
     private func publish(_ value: AudioRecorderData) {
@@ -36,52 +45,54 @@ final class AudioRecorderManager: NSObject {
     private(set) var status: EngineStatus = .notInitialized
     private(set) var streamingInProgress: Bool = false
 
-    init(sampleRate: Int = 16000, numberOfChannels: UInt32 = 1, audioFormat: AVAudioCommonFormat = .pcmFormatInt16) {
-        self.sampleRate = sampleRate
+    init(sampleRate: Int = 16000, numberOfChannels: UInt32 = 1, commonFormat: AVAudioCommonFormat = .pcmFormatInt16) {
+        self.sampleRate = Double(sampleRate)
         self.numberOfChannels = numberOfChannels
-        self.audioFormat = audioFormat
+        self.commonFormat = commonFormat
     }
 
-    func setupEngine() {
+    func setupEngine() throws {
         engine.reset()
         let inputNode = engine.inputNode
         let inputFormat = inputNode.outputFormat(forBus: outputBus)
 
-        let tapBlock: AVAudioNodeTapBlock = { [weak self] buffer, audioTime in
-            self?.convert(buffer: buffer, time: audioTime.audioTimeStamp.mSampleTime)
+        let tapBlock: AVAudioNodeTapBlock = { [weak self] buffer, _ in
+            self?.convert(buffer: buffer)
         }
         inputNode.installTap(onBus: inputBus, bufferSize: bufferSize, format: inputFormat, block: tapBlock)
-        engine.prepare()
-        setupConverter(inputFormat: inputFormat)
 
+        try setupConverter(inputFormat: inputFormat)
+
+        engine.prepare()
         status = .ready
         print("[AudioEngine]: Setup finished.")
     }
 
-    private func setupConverter(inputFormat: AVAudioFormat) {
-        if let outputFormat = AVAudioFormat(commonFormat: audioFormat, sampleRate: Double(sampleRate), channels: numberOfChannels, interleaved: false) {
-            converter = AVAudioConverter(from: inputFormat, to: outputFormat)
+    private func setupConverter(inputFormat: AVAudioFormat) throws {
+        guard let outputFormat = AVAudioFormat(commonFormat: commonFormat, sampleRate: sampleRate, channels: numberOfChannels, interleaved: false) else {
+            throw AudioRecorderManagerError.cannotCreateConverter
         }
+        converter = AVAudioConverter(from: inputFormat, to: outputFormat)
     }
 
-    @discardableResult
-    func convert(buffer: AVAudioPCMBuffer, time: Float64) -> AVAudioPCMBuffer? {
+    func convert(buffer: AVAudioPCMBuffer) {
         guard let converter else {
             status = .failed
             streamingInProgress = false
             print("[AudioEngine]: Convertor doesn't exist.")
             publish(.failure(.converterMissing))
-            return nil
+            return
         }
         let outputFormat = converter.outputFormat
 
-        let targetFrameCapacity = AVAudioFrameCount(outputFormat.sampleRate) * buffer.frameLength / AVAudioFrameCount(buffer.format.sampleRate)
+        let targetFrameCapacity = outputFormat.getTargetFrameCapacity(for: buffer)
+
         guard let convertedBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: targetFrameCapacity) else {
             status = .failed
             streamingInProgress = false
             print("[AudioEngine]: Cannot create AVAudioPCMBuffer.")
             publish(.failure(.cannotCreatePcmBuffer))
-            return nil
+            return
         }
 
         var error: NSError?
@@ -95,15 +106,10 @@ final class AudioRecorderManager: NSObject {
         case .haveData:
             publish(.soundCaptured(buffer: convertedBuffer))
 
-            let arraySize = Int(buffer.frameLength)
-            guard let start = convertedBuffer.floatChannelData?[0] else { return nil }
-            let samples = Array(UnsafeBufferPointer(start: start, count: arraySize))
             if !streamingInProgress {
                 streamingInProgress = true
                 publish(.started)
             }
-
-            return convertedBuffer
         case .error:
             if let error {
                 streamingInProgress = false
@@ -124,7 +130,6 @@ final class AudioRecorderManager: NSObject {
             }
             print("[AudioEngine]: Unknown converter error")
         }
-        return nil
     }
 
     func start() {
@@ -141,7 +146,7 @@ final class AudioRecorderManager: NSObject {
             status = .recording
         } catch {
             streamingInProgress = false
-            publish(.failure(.internalError(error)))
+            publish(.failure(.engineStartFailure(error)))
             print("[AudioEngine]: \(error.localizedDescription)")
             return
         }
@@ -149,22 +154,15 @@ final class AudioRecorderManager: NSObject {
         print("[AudioEngine]: Started tapping microphone.")
     }
 
-    func stop() { 
+    func stop() throws {
         engine.stop()
         engine.reset()
         engine.inputNode.removeTap(onBus: inputBus)
-        setupEngine()
+        try setupEngine()
     }
 }
 
 extension AudioRecorderManager {
-    enum AudioEngineError: Error, LocalizedError {
-        case converterMissing
-        case cannotCreatePcmBuffer
-        case noInputChannel
-        case internalError(Error)
-    }
-
     enum EngineStatus {
         case notInitialized
         case ready
