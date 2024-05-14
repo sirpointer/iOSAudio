@@ -114,16 +114,30 @@ final class VirtualAssistantVM: ObservableObject {
         configurationManager.configure()
             .observe(on: MainScheduler.asyncInstance)
             .subscribe(with: self) { vm, result in
-                if case .audioSessionConfigured = result {
-                    vm.configuredSuccessfuly = true
-                    vm.setupEngines()
-                } else {
-                    vm.configuredSuccessfuly = false
-                }
-                vm.configurationStatus = "\(result)"
-                vm.configurationIsInProgress = false
+                vm.configurationFinished(with: result)
             }
             .disposed(by: disposeBag)
+    }
+
+    private func configurationFinished(with result: AudioConfigurationResult) {
+        if case .audioSessionConfigured = result {
+            configuredSuccessfuly = true
+            setupEngines()
+        } else {
+            configuredSuccessfuly = false
+        }
+        configurationStatus = "\(result)"
+        configurationIsInProgress = false
+    }
+
+    private func setupEngines() {
+        do {
+            try recorderManager.setupEngine()
+            try playerManager.configureEngine()
+            subscribeOnRecorder()
+        } catch {
+            configurationStatus = error.localizedDescription
+        }
     }
 
     private func subscribeOnRecorder() {
@@ -136,16 +150,6 @@ final class VirtualAssistantVM: ObservableObject {
                     break
                 }
             }.disposed(by: disposeBag)
-    }
-
-    private func setupEngines() {
-        do {
-            try recorderManager.setupEngine()
-            try playerManager.configureEngine()
-            subscribeOnRecorder()
-        } catch {
-            configurationStatus = error.localizedDescription
-        }
     }
 
     func startRecording() {
@@ -164,7 +168,11 @@ final class VirtualAssistantVM: ObservableObject {
         }
     }
 
-    func playBuffers(buffers: [Buffer], needConfigure: Bool = true) {
+    func play() {
+        playBuffers(buffers: buffers, needConfigure: true)
+    }
+
+    private func playBuffers(buffers: [Buffer], needConfigure: Bool = true) {
         var buffers = buffers.sorted(by: >)
         guard let firstBuffer = buffers.popLast() else { return }
 
@@ -175,10 +183,6 @@ final class VirtualAssistantVM: ObservableObject {
                 self?.configurationStatus = "\(error.localizedDescription)"
             }
             .disposed(by: disposeBag)
-    }
-
-    func play() {
-        playBuffers(buffers: buffers, needConfigure: true)
     }
 }
 
