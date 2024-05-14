@@ -110,6 +110,7 @@ final class AudioRecorderManager: NSObject {
                 streamingInProgress = true
                 publish(.started)
             }
+            print("[AudioEngine]: Buffer recorded, \(convertedBuffer.frameLength)")
         case .error:
             if let error {
                 streamingInProgress = false
