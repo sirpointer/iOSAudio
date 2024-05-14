@@ -112,6 +112,7 @@ final class VirtualAssistantVM: ObservableObject {
 
     func configure() {
         audioConfigurationManager.configure()
+            .subscribe(on: ConcurrentDispatchQueueScheduler(qos: .userInitiated))
             .observe(on: MainScheduler.asyncInstance)
             .subscribe(with: self) { vm, result in
                 vm.audioConfigurationFinished(with: result)
