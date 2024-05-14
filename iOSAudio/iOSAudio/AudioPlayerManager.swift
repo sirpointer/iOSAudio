@@ -96,3 +96,9 @@ enum AudioPlayerManagerError: LocalizedError {
     case cannotCreateOutputBuffer
     case converterFailure(Error?)
 }
+
+extension AVAudioFormat {
+    func getTargetFrameCapacity(for buffer: AVAudioPCMBuffer) -> AVAudioFrameCount {
+        AVAudioFrameCount(sampleRate) * buffer.frameLength / AVAudioFrameCount(buffer.format.sampleRate)
+    }
+}

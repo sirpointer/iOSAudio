@@ -186,12 +186,6 @@ final class VirtualAssistantVM: ObservableObject {
     }
 }
 
-extension AVAudioFormat {
-    func getTargetFrameCapacity(for buffer: AVAudioPCMBuffer) -> AVAudioFrameCount {
-        AVAudioFrameCount(sampleRate) * buffer.frameLength / AVAudioFrameCount(buffer.format.sampleRate)
-    }
-}
-
 #Preview {
     VirtualAssistant()
 }
