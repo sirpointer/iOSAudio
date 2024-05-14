@@ -88,7 +88,7 @@ final class VirtualAssistantVM: ObservableObject {
     private let numberOfChannels: UInt32 = 1
     private let commonFormat: AVAudioCommonFormat = .pcmFormatInt16
 
-    private let configurationManager = AudioConfigurationManager()
+    private let audioConfigurationManager = AudioConfigurationManager()
     private lazy var recorderManager = AudioRecorderManager(
         sampleRate: sampleRate,
         numberOfChannels: numberOfChannels,
@@ -108,25 +108,25 @@ final class VirtualAssistantVM: ObservableObject {
     @Published var configurationIsInProgress = true
     @Published var configuredSuccessfuly = false
     @Published var recordingInProgress = false
-    var configurationStatus = ""
+    var status = ""
 
     func configure() {
-        configurationManager.configure()
+        audioConfigurationManager.configure()
             .observe(on: MainScheduler.asyncInstance)
             .subscribe(with: self) { vm, result in
-                vm.configurationFinished(with: result)
+                vm.audioConfigurationFinished(with: result)
             }
             .disposed(by: disposeBag)
     }
 
-    private func configurationFinished(with result: AudioConfigurationResult) {
+    private func audioConfigurationFinished(with result: AudioConfigurationResult) {
         if case .audioSessionConfigured = result {
             configuredSuccessfuly = true
             setupEngines()
         } else {
             configuredSuccessfuly = false
         }
-        configurationStatus = "\(result)"
+        status = "\(result)"
         configurationIsInProgress = false
     }
 
@@ -136,7 +136,7 @@ final class VirtualAssistantVM: ObservableObject {
             try playerManager.configureEngine()
             subscribeOnRecorder()
         } catch {
-            configurationStatus = error.localizedDescription
+            status = error.localizedDescription
         }
     }
 
@@ -163,7 +163,7 @@ final class VirtualAssistantVM: ObservableObject {
             try recorderManager.stop()
             recordingInProgress = false
         } catch {
-            self.configurationStatus = "\(error.localizedDescription)"
+            self.status = "\(error.localizedDescription)"
             recordingInProgress = false
         }
     }
@@ -180,7 +180,7 @@ final class VirtualAssistantVM: ObservableObject {
             .subscribe { [weak self] _ in
                 self?.playBuffers(buffers: buffers, needConfigure: false)
             } onFailure: { [weak self] error in
-                self?.configurationStatus = "\(error.localizedDescription)"
+                self?.status = "\(error.localizedDescription)"
             }
             .disposed(by: disposeBag)
     }
