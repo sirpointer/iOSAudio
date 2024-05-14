@@ -169,16 +169,16 @@ final class VirtualAssistantVM: ObservableObject {
     }
 
     func play() {
-        playBuffers(buffers: buffers, needConfigure: true)
+        playBuffers(buffers: buffers)
     }
 
-    private func playBuffers(buffers: [Buffer], needConfigure: Bool = true) {
+    private func playBuffers(buffers: [Buffer]) {
         var buffers = buffers.sorted(by: >)
         guard let firstBuffer = buffers.popLast() else { return }
 
         playerManager.play(firstBuffer.buffer)
             .subscribe { [weak self] _ in
-                self?.playBuffers(buffers: buffers, needConfigure: false)
+                self?.playBuffers(buffers: buffers)
             } onFailure: { [weak self] error in
                 self?.status = "\(error.localizedDescription)"
             }

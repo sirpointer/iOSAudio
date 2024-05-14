@@ -37,7 +37,7 @@ final class AudioPlayerManager {
         let outputFormat = engine.mainMixerNode.outputFormat(forBus: outputBus)
 
         engine.attach(playerNode)
-        engine.connect(playerNode, to: engine.mainMixerNode, format: nil)
+        engine.connect(playerNode, to: engine.mainMixerNode, format: outputFormat)
 
         guard let converter = AVAudioConverter(from: inputFormat, to: outputFormat) else {
             throw AudioPlayerManagerError.cannotConfigureConverter
