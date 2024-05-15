@@ -12,7 +12,7 @@ import RxSwift
 enum AudioRecorderData {
     case failure(AudioRecorderManagerError)
     case started
-    case soundCaptured(buffer: AVAudioPCMBuffer)
+    case soundCaptured(buffers: [AVAudioPCMBuffer])
 }
 
 enum AudioRecorderManagerError: LocalizedError {
@@ -30,11 +30,16 @@ final class AudioRecorderManager: NSObject {
 
     private let inputBus: AVAudioNodeBus = 0
     private let outputBus: AVAudioNodeBus = 0
-    private let bufferSize: AVAudioFrameCount = 1024
+    private let bufferSize: AVAudioFrameCount = 3200
+
+    private var buffers: [AVAudioPCMBuffer] = []
+
+    private let recorderQueue = DispatchQueue(label: "audioRecorderManager", qos: .userInitiated)
 
     let sampleRate: Double
     let numberOfChannels: UInt32
     let commonFormat: AVAudioCommonFormat
+    let targetChunkDuration: TimeInterval
 
     private let dataPublisher = PublishSubject<AudioRecorderData>()
     private func publish(_ value: AudioRecorderData) {
@@ -45,10 +50,11 @@ final class AudioRecorderManager: NSObject {
     private(set) var status: EngineStatus = .notInitialized
     private(set) var streamingInProgress: Bool = false
 
-    init(sampleRate: Double = 16000, numberOfChannels: UInt32 = 1, commonFormat: AVAudioCommonFormat = .pcmFormatInt16) {
+    init(sampleRate: Double = 16000, numberOfChannels: UInt32 = 1, commonFormat: AVAudioCommonFormat = .pcmFormatInt16, targetChunkDuration: TimeInterval) {
         self.sampleRate = sampleRate
         self.numberOfChannels = numberOfChannels
         self.commonFormat = commonFormat
+        self.targetChunkDuration = targetChunkDuration
     }
 
     func setupEngine() throws {
@@ -56,8 +62,10 @@ final class AudioRecorderManager: NSObject {
         let inputNode = engine.inputNode
         let inputFormat = inputNode.outputFormat(forBus: outputBus)
 
-        let tapBlock: AVAudioNodeTapBlock = { [weak self] buffer, _ in
-            self?.convert(buffer: buffer)
+        let tapBlock: AVAudioNodeTapBlock = { [weak self] buffer, time in
+            self?.recorderQueue.async { [weak self] in
+                self?.bufferRecorded(buffer: buffer, time: time)
+            }
         }
         inputNode.installTap(onBus: inputBus, bufferSize: bufferSize, format: inputFormat, block: tapBlock)
 
@@ -75,24 +83,62 @@ final class AudioRecorderManager: NSObject {
         converter = AVAudioConverter(from: inputFormat, to: outputFormat)
     }
 
-    func convert(buffer: AVAudioPCMBuffer) {
-        guard let converter else {
-            status = .failed
+    func bufferRecorded(buffer: AVAudioPCMBuffer, time: AVAudioTime) {
+        do {
+            let (status, outputBuffer, error) = try convert(buffer: buffer)
+
+            switch status {
+            case .haveData:
+                outputBufferReady(outputBuffer)
+
+                if !streamingInProgress {
+                    streamingInProgress = true
+                    publish(.started)
+                }
+                print(time.sampleTime)
+                print("[AudioEngine]: Buffer recorded, \(outputBuffer.frameLength), \(outputBuffer.duration) sec")
+            case .error:
+                if let error {
+                    streamingInProgress = false
+                    publish(.failure(.internalError(error)))
+                }
+                self.status = .failed
+                print("[AudioEngine]: Converter failed, \(error?.localizedDescription ?? "Unknown error")")
+            case .endOfStream:
+                streamingInProgress = false
+                print("[AudioEngine]: The end of stream has been reached. No data was returned.")
+            case .inputRanDry:
+                streamingInProgress = false
+                print("[AudioEngine]: Converter input ran dry.")
+            @unknown default:
+                if let error = error {
+                    streamingInProgress = false
+                    publish(.failure(.internalError(error)))
+                }
+                print("[AudioEngine]: Unknown converter error")
+            }
+        } catch let error as AudioRecorderManagerError {
+            self.status = .failed
             streamingInProgress = false
+            publish(.failure(error))
+        } catch {
+            self.status = .failed
+            streamingInProgress = false
+            publish(.failure(.internalError(error)))
+        }
+    }
+
+    private func convert(buffer: AVAudioPCMBuffer) throws -> (AVAudioConverterOutputStatus, AVAudioPCMBuffer, NSError?) {
+        guard let converter else {
             print("[AudioEngine]: Convertor doesn't exist.")
-            publish(.failure(.converterMissing))
-            return
+            throw AudioRecorderManagerError.converterMissing
         }
         let outputFormat = converter.outputFormat
 
         let targetFrameCapacity = outputFormat.getTargetFrameCapacity(for: buffer)
-
-        guard let convertedBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: targetFrameCapacity) else {
-            status = .failed
-            streamingInProgress = false
+        guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: targetFrameCapacity) else {
             print("[AudioEngine]: Cannot create AVAudioPCMBuffer.")
-            publish(.failure(.cannotCreatePcmBuffer))
-            return
+            throw AudioRecorderManagerError.cannotCreatePcmBuffer
         }
 
         var error: NSError?
@@ -100,40 +146,38 @@ final class AudioRecorderManager: NSObject {
             outStatus.pointee = .haveData
             return buffer
         }
-        let status = converter.convert(to: convertedBuffer, error: &error, withInputFrom: inputBlock)
+        let status = converter.convert(to: outputBuffer, error: &error, withInputFrom: inputBlock)
 
-        switch status {
-        case .haveData:
-            publish(.soundCaptured(buffer: convertedBuffer))
+        return (status, outputBuffer, error)
+    }
 
-            if !streamingInProgress {
-                streamingInProgress = true
-                publish(.started)
-            }
-            print("[AudioEngine]: Buffer recorded, \(convertedBuffer.frameLength)")
-        case .error:
-            if let error {
-                streamingInProgress = false
-                publish(.failure(.internalError(error)))
-            }
-            self.status = .failed
-            print("[AudioEngine]: Converter failed, \(error?.localizedDescription ?? "Unknown error")")
-        case .endOfStream:
-            streamingInProgress = false
-            print("[AudioEngine]: The end of stream has been reached. No data was returned.")
-        case .inputRanDry:
-            streamingInProgress = false
-            print("[AudioEngine]: Converter input ran dry.")
-        @unknown default:
-            if let error = error {
-                streamingInProgress = false
-                publish(.failure(.internalError(error)))
-            }
-            print("[AudioEngine]: Unknown converter error")
+    private func outputBufferReady(_ outputBuffer: AVAudioPCMBuffer) {
+        let currentDuration = buffers.duration
+        let outputBufferDuration = outputBuffer.duration
+
+        guard currentDuration + outputBufferDuration >= targetChunkDuration else {
+            buffers.append(outputBuffer)
+            return
+        }
+
+        let currentDif = abs(targetChunkDuration - currentDuration)
+        let newDif = abs(currentDuration + outputBufferDuration - targetChunkDuration)
+
+        if newDif > currentDif {
+            buffers.append(outputBuffer)
+            publish(.soundCaptured(buffers: buffers))
+            print("[AudioEngine]: Buffers sended, \(buffers.duration)")
+            buffers.removeAll()
+        } else {
+            publish(.soundCaptured(buffers: buffers))
+            print("[AudioEngine]: Buffers sended, \(buffers.duration)")
+            buffers.removeAll()
+            buffers.append(outputBuffer)
         }
     }
 
     func start() {
+        buffers.removeAll()
         guard engine.inputNode.inputFormat(forBus: inputBus).channelCount > 0 else {
             print("[AudioEngine]: No input is available.")
             streamingInProgress = false
@@ -156,6 +200,8 @@ final class AudioRecorderManager: NSObject {
     }
 
     func stop() throws {
+        publish(.soundCaptured(buffers: buffers))
+        buffers.removeAll()
         engine.stop()
         engine.reset()
         engine.inputNode.removeTap(onBus: inputBus)
@@ -169,5 +215,11 @@ extension AudioRecorderManager {
         case ready
         case recording
         case failed
+    }
+}
+
+private extension Array where Element == AVAudioPCMBuffer {
+    var duration: TimeInterval {
+        reduce(0, { $0 + $1.duration })
     }
 }

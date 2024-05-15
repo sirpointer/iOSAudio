@@ -94,7 +94,8 @@ final class VirtualAssistantVM: ObservableObject {
     private lazy var recorderManager = AudioRecorderManager(
         sampleRate: sampleRate,
         numberOfChannels: numberOfChannels,
-        commonFormat: commonFormat
+        commonFormat: commonFormat,
+        targetChunkDuration: 0.6
     )
 
     private lazy var playerManager = AudioPlayerManager(
@@ -105,7 +106,7 @@ final class VirtualAssistantVM: ObservableObject {
 
     private var outputFile: AVAudioFile?
 
-    private var buffers: [Buffer] = []
+    private var buffers: [AVAudioPCMBuffer] = []
 
     @Published var configurationIsInProgress = true
     @Published var configuredSuccessfuly = false
@@ -148,8 +149,8 @@ final class VirtualAssistantVM: ObservableObject {
             .observe(on: MainScheduler.asyncInstance)
             .subscribe(with: self) { vm, data in
                 switch data {
-                case let .soundCaptured(buffer):
-                    vm.buffers.append(Buffer(buffer: buffer))
+                case let .soundCaptured(buffers):
+                    vm.buffers.append(contentsOf: buffers)
                 default:
                     break
                 }
@@ -175,12 +176,11 @@ final class VirtualAssistantVM: ObservableObject {
     }
 
     func play() {
-        let buffers = buffers.sorted(by: <).map(\.buffer)
         playerManager.play(buffers)
             .subscribe(on: SerialDispatchQueueScheduler(qos: .userInitiated))
             .observe(on: MainScheduler.asyncInstance)
             .subscribe(with: self) { vm, _ in
-                vm.status = "Played"
+                vm.status = "Playing finished"
             } onFailure: { vm, error in
                 vm.status = error.localizedDescription
             }

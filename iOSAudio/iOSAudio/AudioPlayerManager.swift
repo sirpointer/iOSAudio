@@ -68,14 +68,9 @@ final class AudioPlayerManager {
             return
         }
 
-        playBuffer(bufferToPlay) { [weak self] result in
-            switch result {
-            case .success:
-                self?.playBuffers(buffers, observer: observer)
-            case .failure(let failure):
-                observer(.failure(failure))
-            }
-        }
+        playBuffer(bufferToPlay) { _ in }
+
+        playBuffers(buffers, observer: observer)
     }
 
     func play(_ buffer: AVAudioPCMBuffer) -> Single<Void> {
@@ -106,7 +101,9 @@ final class AudioPlayerManager {
             playerNode.scheduleBuffer(outputBuffer) {
                 observer(.success(()))
             }
-            playerNode.play()
+            if !playerNode.isPlaying {
+                playerNode.play()
+            }
         case .error:
             observer(.failure(AudioPlayerManagerError.converterFailure(error)))
         default:
@@ -128,3 +125,11 @@ extension AVAudioFormat {
         AVAudioFrameCount(sampleRate) * buffer.frameLength / AVAudioFrameCount(buffer.format.sampleRate)
     }
 }
+
+extension AVAudioPCMBuffer {
+    /// Длительность в секундах.
+    var duration: TimeInterval {
+        Double(frameLength) / format.sampleRate
+    }
+}
+
