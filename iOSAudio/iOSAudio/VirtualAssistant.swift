@@ -69,6 +69,9 @@ private struct AssistantView: View {
 
             Button("Play record", action: vm.play)
                 .padding()
+
+            Button("Clear buffer", action: vm.clearBuffer)
+                .padding()
         }
     }
 }
@@ -151,6 +154,7 @@ final class VirtualAssistantVM: ObservableObject {
                 switch data {
                 case let .soundCaptured(buffers):
                     vm.buffers.append(contentsOf: buffers)
+                    print("Added to buffer")
                 default:
                     break
                 }
@@ -185,6 +189,10 @@ final class VirtualAssistantVM: ObservableObject {
                 vm.status = error.localizedDescription
             }
             .disposed(by: disposeBag)
+    }
+
+    func clearBuffer() {
+        buffers.removeAll()
     }
 }
 

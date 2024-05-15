@@ -52,42 +52,26 @@ final class AudioPlayerManager {
         }
     }
 
-
     func play(_ buffers: [AVAudioPCMBuffer]) -> Single<Void> {
         Single.create { [weak self] observer in
-            let buffers = Array(buffers.reversed())
             self?.playBuffers(buffers, observer: observer)
             return Disposables.create()
         }
     }
 
     private func playBuffers(_ buffers: [AVAudioPCMBuffer], observer: @escaping (Result<Void, Error>) -> Void) {
-        var buffers = buffers
-        guard let bufferToPlay = buffers.popLast() else {
-            observer(.success(()))
-            return
-        }
-
-        playBuffer(bufferToPlay) { _ in }
-
-        playBuffers(buffers, observer: observer)
-    }
-
-    func play(_ buffer: AVAudioPCMBuffer) -> Single<Void> {
-        Single.create { [weak self] observer in
-            self?.playBuffer(buffer, observer: observer)
-            return Disposables.create()
+        var buffers = buffers.compactMap { convertBuffer($0) }
+        for buffer in buffers {
+            playBuffer(buffer, observer: { _ in })
         }
     }
 
-    private func playBuffer(_ buffer: AVAudioPCMBuffer, observer: @escaping (Result<Void, Error>) -> Void) {
+    private func convertBuffer(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
         let outputFormat = converter.outputFormat
-
         let targetFrameCapacity = outputFormat.getTargetFrameCapacity(for: buffer)
 
         guard let outputBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: targetFrameCapacity) else {
-            observer(.failure(AudioPlayerManagerError.cannotCreateOutputBuffer))
-            return
+            return nil
         }
 
         var error: NSError?
@@ -98,16 +82,18 @@ final class AudioPlayerManager {
 
         switch status {
         case .haveData:
-            playerNode.scheduleBuffer(outputBuffer) {
-                observer(.success(()))
-            }
-            if !playerNode.isPlaying {
-                playerNode.play()
-            }
-        case .error:
-            observer(.failure(AudioPlayerManagerError.converterFailure(error)))
+            return outputBuffer
         default:
-            break
+            return nil
+        }
+    }
+
+    private func playBuffer(_ buffer: AVAudioPCMBuffer, observer: @escaping (Result<Void, Error>) -> Void) {
+        playerNode.scheduleBuffer(buffer) {
+            observer(.success(()))
+        }
+        if !playerNode.isPlaying {
+            playerNode.play()
         }
     }
 }
