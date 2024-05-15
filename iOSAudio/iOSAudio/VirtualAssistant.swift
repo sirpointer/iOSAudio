@@ -175,21 +175,14 @@ final class VirtualAssistantVM: ObservableObject {
     }
 
     func play() {
-        playBuffers(buffers: buffers)
-    }
-
-    private func playBuffers(buffers: [Buffer]) {
-        var buffers = buffers.sorted(by: >)
-        guard let firstBuffer = buffers.popLast() else { return }
-
-        playerManager.play(firstBuffer.buffer)
+        let buffers = buffers.sorted(by: <).map(\.buffer)
+        playerManager.play(buffers)
             .subscribe(on: SerialDispatchQueueScheduler(qos: .userInitiated))
-            .subscribe { [weak self] _ in
-                self?.playBuffers(buffers: buffers)
-            } onFailure: { [weak self] error in
-                DispatchQueue.main.async { [weak self] in
-                    self?.status = "\(error.localizedDescription)"
-                }
+            .observe(on: MainScheduler.asyncInstance)
+            .subscribe(with: self) { vm, _ in
+                vm.status = "Played"
+            } onFailure: { vm, error in
+                vm.status = error.localizedDescription
             }
             .disposed(by: disposeBag)
     }

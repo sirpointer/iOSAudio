@@ -52,6 +52,32 @@ final class AudioPlayerManager {
         }
     }
 
+
+    func play(_ buffers: [AVAudioPCMBuffer]) -> Single<Void> {
+        Single.create { [weak self] observer in
+            let buffers = Array(buffers.reversed())
+            self?.playBuffers(buffers, observer: observer)
+            return Disposables.create()
+        }
+    }
+
+    private func playBuffers(_ buffers: [AVAudioPCMBuffer], observer: @escaping (Result<Void, Error>) -> Void) {
+        var buffers = buffers
+        guard let bufferToPlay = buffers.popLast() else {
+            observer(.success(()))
+            return
+        }
+
+        playBuffer(bufferToPlay) { [weak self] result in
+            switch result {
+            case .success:
+                self?.playBuffers(buffers, observer: observer)
+            case .failure(let failure):
+                observer(.failure(failure))
+            }
+        }
+    }
+
     func play(_ buffer: AVAudioPCMBuffer) -> Single<Void> {
         Single.create { [weak self] observer in
             self?.playBuffer(buffer, observer: observer)
