@@ -53,7 +53,7 @@ private struct AssistantView: View {
     @ObservedObject var vm: VirtualAssistantVM
 
     var body: some View {
-        VStack {
+        VStack(spacing: 20) {
             if vm.recordingInProgress {
                 Text("Recording in progress")
             }
@@ -65,8 +65,10 @@ private struct AssistantView: View {
                     vm.startRecording()
                 }
             }
+            .padding()
 
             Button("Play record", action: vm.play)
+                .padding()
         }
     }
 }
@@ -143,6 +145,7 @@ final class VirtualAssistantVM: ObservableObject {
 
     private func subscribeOnRecorder() {
         recorderManager.outputData
+            .observe(on: MainScheduler.asyncInstance)
             .subscribe(with: self) { vm, data in
                 switch data {
                 case let .soundCaptured(buffer):
@@ -155,7 +158,9 @@ final class VirtualAssistantVM: ObservableObject {
 
     func startRecording() {
         buffers.removeAll()
-        recorderManager.start()
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.recorderManager.start()
+        }
         recordingInProgress = true
     }
 
@@ -178,6 +183,8 @@ final class VirtualAssistantVM: ObservableObject {
         guard let firstBuffer = buffers.popLast() else { return }
 
         playerManager.play(firstBuffer.buffer)
+            .subscribe(on: SerialDispatchQueueScheduler(qos: .userInitiated))
+            .observe(on: MainScheduler.asyncInstance)
             .subscribe { [weak self] _ in
                 self?.playBuffers(buffers: buffers)
             } onFailure: { [weak self] error in
