@@ -158,8 +158,8 @@ final class VirtualAssistantVM: ObservableObject {
 
     func startRecording() {
         buffers.removeAll()
-        DispatchQueue.global(qos: .userInitiated).async {
-            self.recorderManager.start()
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.recorderManager.start()
         }
         recordingInProgress = true
     }
@@ -184,11 +184,12 @@ final class VirtualAssistantVM: ObservableObject {
 
         playerManager.play(firstBuffer.buffer)
             .subscribe(on: SerialDispatchQueueScheduler(qos: .userInitiated))
-            .observe(on: MainScheduler.asyncInstance)
             .subscribe { [weak self] _ in
                 self?.playBuffers(buffers: buffers)
             } onFailure: { [weak self] error in
-                self?.status = "\(error.localizedDescription)"
+                DispatchQueue.main.async { [weak self] in
+                    self?.status = "\(error.localizedDescription)"
+                }
             }
             .disposed(by: disposeBag)
     }
