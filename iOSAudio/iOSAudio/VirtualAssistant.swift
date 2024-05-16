@@ -72,21 +72,24 @@ private struct AssistantView: View {
 
             Button("Clear buffer", action: vm.clearBuffer)
                 .padding()
+
+            List(vm.statusHistory) { node in
+                Text(node.status)
+            }
         }
     }
 }
 
-struct Buffer: Identifiable, Comparable {
-    let id = UUID()
-    let buffer: AVAudioPCMBuffer
-    let timestamp = Date()
-
-    static func < (lhs: Buffer, rhs: Buffer) -> Bool {
-        lhs.timestamp < rhs.timestamp
-    }
-}
-
 final class VirtualAssistantVM: ObservableObject {
+    struct HistoryNode: Identifiable {
+        let id = UUID()
+        let status: String
+
+        init(_ status: String) {
+            self.status = status
+        }
+    }
+
     private var disposeBag = DisposeBag()
 
     private let sampleRate: Double = 16000
@@ -114,7 +117,13 @@ final class VirtualAssistantVM: ObservableObject {
     @Published var configurationIsInProgress = true
     @Published var configuredSuccessfuly = false
     @Published var recordingInProgress = false
-    var status = ""
+    @Published var status = "" {
+        willSet {
+            statusHistory.append(.init(newValue))
+        }
+    }
+    @Published private(set) var statusHistory: [HistoryNode] = []
+
 
     func configure() {
         audioConfigurationManager.configure()
@@ -138,50 +147,71 @@ final class VirtualAssistantVM: ObservableObject {
     }
 
     private func setupEngines() {
-        do {
-            try recorderManager.setupEngine()
-            try playerManager.configureEngine()
-            subscribeOnRecorder()
-        } catch {
-            status = error.localizedDescription
-        }
+        recorderManager.setupRecorder()
+            .observe(on: MainScheduler.asyncInstance)
+            .subscribe { [weak self] _ in
+                guard let self else { return }
+                do {
+                    try playerManager.configureEngine()
+                    subscribeOnRecorder()
+                    statusHistory.append(.init("Configuration finished"))
+                } catch {
+                    status = error.localizedDescription
+                }
+            } onFailure: { [weak self] error in
+                self?.status = error.localizedDescription
+            }
+            .disposed(by: disposeBag)
     }
 
     private func subscribeOnRecorder() {
         recorderManager.outputData
             .observe(on: MainScheduler.asyncInstance)
-            .subscribe(with: self) { vm, data in
+            .subscribe { [weak self] data in
+                guard let self else { return }
                 switch data {
                 case let .soundCaptured(buffers):
-                    vm.buffers.append(contentsOf: buffers)
-                    print("Added to buffer")
+                    self.buffers.append(contentsOf: buffers)
+                    statusHistory.append(.init("Sound captured, \(self.buffers.count), \(self.buffers.duration) sec"))
+                case let .failure(error):
+                    status = error.localizedDescription
                 default:
                     break
                 }
             }.disposed(by: disposeBag)
     }
 
+    // MARK: Recording
     func startRecording() {
         buffers.removeAll()
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            self?.recorderManager.start()
-        }
-        recordingInProgress = true
+        recorderManager.start()
+            .observe(on: MainScheduler.asyncInstance)
+            .subscribe { [weak self] _ in
+                self?.recordingInProgress = true
+                self?.statusHistory.append(.init("Recording started"))
+            } onFailure: { [weak self] error in
+                self?.recordingInProgress = false
+                self?.status = error.localizedDescription
+            }
+            .disposed(by: disposeBag)
     }
 
     func finishRecording() {
-        do {
-            try recorderManager.stop()
-            recordingInProgress = false
-        } catch {
-            self.status = "\(error.localizedDescription)"
-            recordingInProgress = false
-        }
+        recorderManager.stop()
+            .observe(on: MainScheduler.asyncInstance)
+            .subscribe { [weak self] _ in
+                self?.recordingInProgress = false
+                self?.statusHistory.append(.init("Recording stopped"))
+            } onFailure: { [weak self] error in
+                self?.recordingInProgress = false
+                self?.status = error.localizedDescription
+            }
+            .disposed(by: disposeBag)
     }
 
+    // MARK: Playing
     func play() {
         playerManager.play(buffers)
-            .subscribe(on: SerialDispatchQueueScheduler(qos: .userInitiated))
             .observe(on: MainScheduler.asyncInstance)
             .subscribe(with: self) { vm, _ in
                 vm.status = "Playing finished"
@@ -193,6 +223,7 @@ final class VirtualAssistantVM: ObservableObject {
 
     func clearBuffer() {
         buffers.removeAll()
+        statusHistory.append(.init("Buffers cleared"))
     }
 }
 
