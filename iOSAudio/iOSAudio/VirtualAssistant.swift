@@ -96,23 +96,26 @@ final class VirtualAssistantVM: ObservableObject {
     private let numberOfChannels: UInt32 = 1
     private let commonFormat: AVAudioCommonFormat = .pcmFormatInt16
 
+    private let engine = AVAudioEngine()
     private let audioConfigurationManager = AudioConfigurationManager()
     private lazy var recorderManager = AudioRecorderManager(
         sampleRate: sampleRate,
         numberOfChannels: numberOfChannels,
         commonFormat: commonFormat,
-        targetChunkDuration: 0.6
+        targetChunkDuration: 0.6,
+        engine: engine
     )
 
     private lazy var playerManager = AudioPlayerManager(
         sampleRate: sampleRate,
         numberOfChannels: numberOfChannels,
-        commonFormat: commonFormat
+        commonFormat: commonFormat,
+        engine: engine
     )
 
     private var outputFile: AVAudioFile?
 
-    private var buffers: [AVAudioPCMBuffer] = []
+    private var buffers: [Buffer] = []
 
     @Published var configurationIsInProgress = true
     @Published var configuredSuccessfuly = false
@@ -147,10 +150,10 @@ final class VirtualAssistantVM: ObservableObject {
     }
 
     private func setupEngines() {
-        let configurePlayer = playerManager.setupPlayer().asObservable()
         let setupRecorder = recorderManager.setupRecorder().asObservable()
+        let configurePlayer = playerManager.setupPlayer().asObservable()
 
-        Observable.zip(configurePlayer, setupRecorder)
+        Observable.zip(setupRecorder, configurePlayer)
             .observe(on: MainScheduler.asyncInstance)
             .asSingle()
             .subscribe { [weak self] _ in
@@ -170,7 +173,7 @@ final class VirtualAssistantVM: ObservableObject {
                 switch data {
                 case let .soundCaptured(buffers):
                     self.buffers.append(contentsOf: buffers)
-                    statusHistory.append(.init("Sound captured, \(self.buffers.count), \(self.buffers.duration) sec"))
+                    statusHistory.append(.init("Sound captured, \(self.buffers.count), \(self.buffers.map(\.buffer).duration) sec"))
                 case let .failure(error):
                     status = error.localizedDescription
                 default:
@@ -182,6 +185,7 @@ final class VirtualAssistantVM: ObservableObject {
     // MARK: Recording
     func startRecording() {
         buffers.removeAll()
+
         recorderManager.start()
             .observe(on: MainScheduler.asyncInstance)
             .subscribe { [weak self] _ in
@@ -209,6 +213,7 @@ final class VirtualAssistantVM: ObservableObject {
 
     // MARK: Playing
     func play() {
+        let buffers = buffers.sorted().map(\.buffer)
         playerManager.play(buffers)
             .observe(on: MainScheduler.asyncInstance)
             .subscribe(with: self) { vm, _ in

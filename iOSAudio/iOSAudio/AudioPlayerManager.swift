@@ -10,7 +10,7 @@ import AVFoundation
 import RxSwift
 
 final class AudioPlayerManager {
-    private let engine = AVAudioEngine()
+    private var engine: AVAudioEngine
     private var playerNode = AVAudioPlayerNode()
     private var converter = AVAudioConverter()
 
@@ -23,10 +23,11 @@ final class AudioPlayerManager {
     let numberOfChannels: UInt32
     let commonFormat: AVAudioCommonFormat
 
-    init(sampleRate: Double = 16000, numberOfChannels: UInt32 = 1, commonFormat: AVAudioCommonFormat = .pcmFormatInt16) {
+    init(sampleRate: Double = 16000, numberOfChannels: UInt32 = 1, commonFormat: AVAudioCommonFormat = .pcmFormatInt16, engine: AVAudioEngine = AVAudioEngine()) {
         self.sampleRate = sampleRate
         self.numberOfChannels = numberOfChannels
         self.commonFormat = commonFormat
+        self.engine = engine
     }
 
     private func convertBuffer(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
@@ -83,7 +84,6 @@ extension AudioPlayerManager {
         try engine.start()
     }
 
-
     func play(_ buffers: [AVAudioPCMBuffer]) -> Single<Void> {
         Single.create { [weak self] observer in
             self?.playBuffers(buffers: buffers, observer: observer)
@@ -93,7 +93,6 @@ extension AudioPlayerManager {
     }
 
     private func playBuffers(buffers: [AVAudioPCMBuffer], observer: @escaping (Result<Void, Error>) -> Void) {
-        playerNode.stop()
         let buffers = buffers.compactMap { convertBuffer($0) }
         scheduleBuffers(buffers: buffers, observer: observer)
         playerNode.play()
@@ -101,7 +100,8 @@ extension AudioPlayerManager {
 
     private func scheduleBuffers(buffers: [AVAudioPCMBuffer], observer: @escaping (Result<Void, Error>) -> Void) {
         for (index, buffer) in buffers.enumerated() {
-            let callback = index == buffers.count - 1 ? { [weak self] in
+            let isLast = index == buffers.count - 1
+            let callback = isLast ? { [weak self] in
                 observer(.success(()))
                 self?.recorderQueue.async { [weak self] in
                     self?.playerNode.stop()
@@ -120,8 +120,6 @@ extension AudioPlayerManager {
         .subscribe(on: scheduler)
     }
 }
-
-
 
 enum AudioPlayerManagerError: LocalizedError {
     case incorrectInputFormat

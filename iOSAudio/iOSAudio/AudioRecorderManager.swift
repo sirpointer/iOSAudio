@@ -12,7 +12,7 @@ import RxSwift
 enum AudioRecorderData {
     case failure(AudioRecorderManagerError)
     case started
-    case soundCaptured(buffers: [AVAudioPCMBuffer])
+    case soundCaptured(buffers: [Buffer])
 }
 
 enum AudioRecorderManagerError: LocalizedError {
@@ -24,8 +24,17 @@ enum AudioRecorderManagerError: LocalizedError {
     case cannotCreateConverter
 }
 
+struct Buffer: Comparable {
+    let buffer: AVAudioPCMBuffer
+    let time: AVAudioTime
+
+    static func < (lhs: Buffer, rhs: Buffer) -> Bool {
+        lhs.time.sampleTime < rhs.time.sampleTime
+    }
+}
+
 final class AudioRecorderManager: NSObject {
-    private var engine = AVAudioEngine()
+    private var engine: AVAudioEngine
     private var converter: AVAudioConverter?
 
     private var audioInputNode: AVAudioInputNode { engine.inputNode }
@@ -37,7 +46,7 @@ final class AudioRecorderManager: NSObject {
     private let outputBus: AVAudioNodeBus = 0
     private let bufferSize: AVAudioFrameCount = 10000
 
-    private var buffers: [AVAudioPCMBuffer] = []
+    private var buffers: [Buffer] = []
 
     private let recorderQueue = DispatchQueue(label: "audioRecorderManager", qos: .default)
     private lazy var scheduler = SerialDispatchQueueScheduler(queue: recorderQueue, internalSerialQueueName: recorderQueue.label)
@@ -56,11 +65,12 @@ final class AudioRecorderManager: NSObject {
     private(set) var status: EngineStatus = .notInitialized
     private(set) var streamingInProgress: Bool = false
 
-    init(sampleRate: Double = 16000, numberOfChannels: UInt32 = 1, commonFormat: AVAudioCommonFormat = .pcmFormatInt16, targetChunkDuration: TimeInterval) {
+    init(sampleRate: Double = 16000, numberOfChannels: UInt32 = 1, commonFormat: AVAudioCommonFormat = .pcmFormatInt16, targetChunkDuration: TimeInterval, engine: AVAudioEngine = AVAudioEngine()) {
         self.sampleRate = sampleRate
         self.numberOfChannels = numberOfChannels
         self.commonFormat = commonFormat
         self.targetChunkDuration = targetChunkDuration
+        self.engine = engine
     }
 
     func setupRecorder() -> Single<Void> {
@@ -72,7 +82,6 @@ final class AudioRecorderManager: NSObject {
     }
 
     private func setupRecorder(observer: (Result<Void, Error>) -> Void) {
-        engine.reset()
         let inputFormat = audioInputNode.outputFormat(forBus: outputBus)
 
         do {
@@ -98,7 +107,7 @@ final class AudioRecorderManager: NSObject {
 
             switch status {
             case .haveData:
-                outputBufferReady(outputBuffer)
+                outputBufferReady(.init(buffer: outputBuffer, time: time))
 
                 if !streamingInProgress {
                     streamingInProgress = true
@@ -159,9 +168,9 @@ final class AudioRecorderManager: NSObject {
         return (status, outputBuffer, error)
     }
 
-    private func outputBufferReady(_ outputBuffer: AVAudioPCMBuffer) {
-        let currentDuration = buffers.duration
-        let outputBufferDuration = outputBuffer.duration
+    private func outputBufferReady(_ outputBuffer: Buffer) {
+        let currentDuration = buffers.map(\.buffer).duration
+        let outputBufferDuration = outputBuffer.buffer.duration
 
         guard currentDuration + outputBufferDuration >= targetChunkDuration else {
             buffers.append(outputBuffer)
@@ -174,11 +183,11 @@ final class AudioRecorderManager: NSObject {
         if newDif > currentDif {
             buffers.append(outputBuffer)
             publish(.soundCaptured(buffers: buffers))
-            print("[AudioEngine]: Buffers sended, \(buffers.duration)")
+            print("[AudioEngine]: Buffers sended, \(buffers.map(\.buffer).duration)")
             buffers.removeAll()
         } else {
             publish(.soundCaptured(buffers: buffers))
-            print("[AudioEngine]: Buffers sended, \(buffers.duration)")
+            print("[AudioEngine]: Buffers sended, \(buffers.map(\.buffer).duration)")
             buffers.removeAll()
             buffers.append(outputBuffer)
         }
@@ -249,7 +258,7 @@ extension AudioRecorderManager {
         publish(.soundCaptured(buffers: buffers))
         buffers.removeAll(keepingCapacity: true)
         audioInputNode.removeTap(onBus: inputBus)
-        engine.stop()
+//        engine.stop()
         observer(.success(()))
         print("[AudioEngine]: Recording stopped.")
     }
