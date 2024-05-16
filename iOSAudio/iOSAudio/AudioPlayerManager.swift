@@ -14,6 +14,9 @@ final class AudioPlayerManager {
     private var playerNode = AVAudioPlayerNode()
     private var converter = AVAudioConverter()
 
+    private let recorderQueue = DispatchQueue(label: "audioPlayerManager", qos: .default)
+    private lazy var scheduler = SerialDispatchQueueScheduler(queue: recorderQueue, internalSerialQueueName: recorderQueue.label)
+
     private let outputBus: AVAudioNodeBus = 0
 
     let sampleRate: Double
@@ -24,46 +27,6 @@ final class AudioPlayerManager {
         self.sampleRate = sampleRate
         self.numberOfChannels = numberOfChannels
         self.commonFormat = commonFormat
-    }
-
-    func configureEngine() throws {
-        playerNode.stop()
-        engine.reset()
-        playerNode = AVAudioPlayerNode()
-
-        guard let inputFormat = AVAudioFormat(commonFormat: commonFormat, sampleRate: sampleRate, channels: numberOfChannels, interleaved: false) else {
-            throw AudioPlayerManagerError.incorrectInputFormat
-        }
-        let outputFormat = engine.mainMixerNode.outputFormat(forBus: outputBus)
-
-        engine.attach(playerNode)
-        engine.connect(playerNode, to: engine.mainMixerNode, format: outputFormat)
-
-        guard let converter = AVAudioConverter(from: inputFormat, to: outputFormat) else {
-            throw AudioPlayerManagerError.cannotConfigureConverter
-        }
-        self.converter = converter
-
-        engine.prepare()
-        do {
-            try engine.start()
-        } catch {
-            throw AudioPlayerManagerError.engineStartFailure(error)
-        }
-    }
-
-    func play(_ buffers: [AVAudioPCMBuffer]) -> Single<Void> {
-        Single.create { [weak self] observer in
-            self?.playBuffers(buffers, observer: observer)
-            return Disposables.create()
-        }
-    }
-
-    private func playBuffers(_ buffers: [AVAudioPCMBuffer], observer: @escaping (Result<Void, Error>) -> Void) {
-        var buffers = buffers.compactMap { convertBuffer($0) }
-        for buffer in buffers {
-            playBuffer(buffer, observer: { _ in })
-        }
     }
 
     private func convertBuffer(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
@@ -87,16 +50,78 @@ final class AudioPlayerManager {
             return nil
         }
     }
+}
 
-    private func playBuffer(_ buffer: AVAudioPCMBuffer, observer: @escaping (Result<Void, Error>) -> Void) {
-        playerNode.scheduleBuffer(buffer) {
-            observer(.success(()))
+extension AudioPlayerManager {
+
+    func setupPlayer() -> Single<Void> {
+        Single.create { [weak self] observer in
+            do {
+                try self?.configurePlayer()
+                observer(.success(()))
+            } catch {
+                observer(.failure(error))
+            }
+            return Disposables.create()
         }
-        if !playerNode.isPlaying {
-            playerNode.play()
+        .subscribe(on: scheduler)
+    }
+
+    private func configurePlayer() throws {
+        guard let inputFormat = AVAudioFormat(commonFormat: commonFormat, sampleRate: sampleRate, channels: numberOfChannels, interleaved: false) else {
+            throw AudioPlayerManagerError.incorrectInputFormat
+        }
+        let outputFormat = engine.mainMixerNode.outputFormat(forBus: outputBus)
+
+        engine.attach(playerNode)
+        engine.connect(playerNode, to: engine.mainMixerNode, format: nil)
+
+        guard let converter = AVAudioConverter(from: inputFormat, to: outputFormat) else {
+            throw AudioPlayerManagerError.cannotConfigureConverter
+        }
+        self.converter = converter
+        try engine.start()
+    }
+
+
+    func play(_ buffers: [AVAudioPCMBuffer]) -> Single<Void> {
+        Single.create { [weak self] observer in
+            self?.playBuffers(buffers: buffers, observer: observer)
+            return Disposables.create()
+        }
+        .subscribe(on: scheduler)
+    }
+
+    private func playBuffers(buffers: [AVAudioPCMBuffer], observer: @escaping (Result<Void, Error>) -> Void) {
+        playerNode.stop()
+        let buffers = buffers.compactMap { convertBuffer($0) }
+        scheduleBuffers(buffers: buffers, observer: observer)
+        playerNode.play()
+    }
+
+    private func scheduleBuffers(buffers: [AVAudioPCMBuffer], observer: @escaping (Result<Void, Error>) -> Void) {
+        for (index, buffer) in buffers.enumerated() {
+            let callback = index == buffers.count - 1 ? { [weak self] in
+                observer(.success(()))
+                self?.recorderQueue.async { [weak self] in
+                    self?.playerNode.stop()
+                }
+            } : nil
+            playerNode.scheduleBuffer(buffer) { callback?() }
         }
     }
+
+    func stop() -> Single<Void> {
+        Single.create { [weak self] observer in
+            self?.playerNode.stop()
+            observer(.success(()))
+            return Disposables.create()
+        }
+        .subscribe(on: scheduler)
+    }
 }
+
+
 
 enum AudioPlayerManagerError: LocalizedError {
     case incorrectInputFormat
@@ -119,3 +144,8 @@ extension AVAudioPCMBuffer {
     }
 }
 
+extension Array where Element == AVAudioPCMBuffer {
+    var duration: TimeInterval {
+        reduce(0, { $0 + $1.duration })
+    }
+}

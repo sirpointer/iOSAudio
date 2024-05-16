@@ -39,7 +39,7 @@ final class AudioRecorderManager: NSObject {
 
     private var buffers: [AVAudioPCMBuffer] = []
 
-    private let recorderQueue = DispatchQueue(label: "audioRecorderManager", qos: .userInitiated)
+    private let recorderQueue = DispatchQueue(label: "audioRecorderManager", qos: .default)
     private lazy var scheduler = SerialDispatchQueueScheduler(queue: recorderQueue, internalSerialQueueName: recorderQueue.label)
 
     let sampleRate: Double

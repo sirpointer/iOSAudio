@@ -147,17 +147,15 @@ final class VirtualAssistantVM: ObservableObject {
     }
 
     private func setupEngines() {
-        recorderManager.setupRecorder()
+        let configurePlayer = playerManager.setupPlayer().asObservable()
+        let setupRecorder = recorderManager.setupRecorder().asObservable()
+
+        Observable.zip(configurePlayer, setupRecorder)
             .observe(on: MainScheduler.asyncInstance)
+            .asSingle()
             .subscribe { [weak self] _ in
-                guard let self else { return }
-                do {
-                    try playerManager.configureEngine()
-                    subscribeOnRecorder()
-                    statusHistory.append(.init("Configuration finished"))
-                } catch {
-                    status = error.localizedDescription
-                }
+                self?.subscribeOnRecorder()
+                self?.statusHistory.append(.init("Configuration finished"))
             } onFailure: { [weak self] error in
                 self?.status = error.localizedDescription
             }
