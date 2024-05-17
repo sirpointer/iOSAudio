@@ -73,7 +73,10 @@ private struct AssistantView: View {
             Button("Clear buffer", action: vm.clearBuffer)
                 .padding()
 
-            List(vm.statusHistory) { node in
+            Button("Write to file", action: vm.writeToFile)
+                .padding()
+
+            List(vm.statusHistory.reversed()) { node in
                 Text(node.status)
             }
         }
@@ -102,7 +105,7 @@ final class VirtualAssistantVM: ObservableObject {
         sampleRate: sampleRate,
         numberOfChannels: numberOfChannels,
         commonFormat: commonFormat,
-        targetChunkDuration: 0.8,
+        targetChunkDuration: 1.5,
         engine: engine
     )
 
@@ -112,6 +115,8 @@ final class VirtualAssistantVM: ObservableObject {
         commonFormat: commonFormat,
         engine: engine
     )
+
+    private var encoderManager = AudioEncoderManager()
 
     private var buffers: [Buffer] = []
 
@@ -125,8 +130,9 @@ final class VirtualAssistantVM: ObservableObject {
     }
     @Published private(set) var statusHistory: [HistoryNode] = []
 
-
     func configure() {
+        try? FileManager.default.removeItem(at: .recordingAVAudioFileURL)
+        try? FileManager.default.removeItem(at: .recordingExtAudioFileRefURL)
         audioConfigurationManager.configure()
             .subscribe(on: ConcurrentDispatchQueueScheduler(qos: .userInitiated))
             .observe(on: MainScheduler.asyncInstance)
@@ -225,6 +231,11 @@ final class VirtualAssistantVM: ObservableObject {
     func clearBuffer() {
         buffers.removeAll()
         statusHistory.append(.init("Buffers cleared"))
+    }
+
+    func writeToFile() {
+        try! encoderManager.writeFlacToFileWithAVAudioFile(buffers: buffers.map(\.buffer))
+        try! encoderManager.writeFlacToFileWithExtAudioFileRef(buffers: buffers.map(\.buffer))
     }
 }
 

@@ -44,7 +44,7 @@ final class AudioRecorderManager: NSObject {
 
     private let inputBus: AVAudioNodeBus = 0
     private let outputBus: AVAudioNodeBus = 0
-    private let bufferSize: AVAudioFrameCount = 10000
+    private let bufferSize: AVAudioFrameCount = 8192
 
     private var buffers: [Buffer] = []
 
