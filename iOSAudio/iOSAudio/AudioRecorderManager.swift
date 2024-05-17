@@ -73,6 +73,7 @@ final class AudioRecorderManager: NSObject {
         self.engine = engine
     }
 
+    // MARK: Setup Recorder
     func setupRecorder() -> Single<Void> {
         Single.create { [weak self] observer in
             self?.setupRecorder(observer: observer)
@@ -101,6 +102,54 @@ final class AudioRecorderManager: NSObject {
         converter = AVAudioConverter(from: inputFormat, to: outputFormat)
     }
 
+    // MARK: Start
+    func start() -> Single<Void> {
+        Single.create { [weak self] observer in
+            self?.startRecording(observer: observer)
+            return Disposables.create()
+        }
+        .subscribe(on: scheduler)
+    }
+
+    private func startRecording(observer: @escaping (Result<Void, Error>) -> Void) {
+        buffers.removeAll(keepingCapacity: true)
+
+        guard audioInputNode.inputFormat(forBus: inputBus).channelCount > 0 else {
+            print("[AudioEngine]: No input is available.")
+            streamingInProgress = false
+            observer(.failure(AudioRecorderManagerError.noInputChannel))
+            status = .failed
+            return
+        }
+
+        prepareEngine()
+
+        do {
+            try engine.start()
+            status = .recording
+        } catch {
+            streamingInProgress = false
+            observer(.failure(AudioRecorderManagerError.engineStartFailure(error)))
+            print("[AudioEngine]: \(error.localizedDescription)")
+            return
+        }
+
+        observer(.success(()))
+        print("[AudioEngine]: Started tapping microphone.")
+    }
+
+    private func prepareEngine() {
+        let inputFormat = audioInputNode.outputFormat(forBus: outputBus)
+        let tapBlock: AVAudioNodeTapBlock = { [weak self] buffer, time in
+            self?.recorderQueue.async { [weak self] in
+                self?.bufferRecorded(buffer: buffer, time: time)
+            }
+        }
+        audioInputNode.installTap(onBus: inputBus, bufferSize: bufferSize, format: inputFormat, block: tapBlock)
+        engine.prepare()
+    }
+
+    // MARK: Buffer Recorded
     private func bufferRecorded(buffer: AVAudioPCMBuffer, time: AVAudioTime) {
         do {
             let (status, outputBuffer, error) = try convert(buffer: buffer)
@@ -192,59 +241,7 @@ final class AudioRecorderManager: NSObject {
             buffers.append(outputBuffer)
         }
     }
-}
 
-
-extension AudioRecorderManager {
-    // MARK: Start
-    func start() -> Single<Void> {
-        Single.create { [weak self] observer in
-            self?.startRecording(observer: observer)
-            return Disposables.create()
-        }
-        .subscribe(on: scheduler)
-    }
-
-    private func startRecording(observer: @escaping (Result<Void, Error>) -> Void) {
-        buffers.removeAll(keepingCapacity: true)
-
-        guard audioInputNode.inputFormat(forBus: inputBus).channelCount > 0 else {
-            print("[AudioEngine]: No input is available.")
-            streamingInProgress = false
-            observer(.failure(AudioRecorderManagerError.noInputChannel))
-            status = .failed
-            return
-        }
-
-        prepareEngine()
-
-        do {
-            try engine.start()
-            status = .recording
-        } catch {
-            streamingInProgress = false
-            observer(.failure(AudioRecorderManagerError.engineStartFailure(error)))
-            print("[AudioEngine]: \(error.localizedDescription)")
-            return
-        }
-
-        observer(.success(()))
-        print("[AudioEngine]: Started tapping microphone.")
-    }
-
-    private func prepareEngine() {
-        let inputFormat = audioInputNode.outputFormat(forBus: outputBus)
-        let tapBlock: AVAudioNodeTapBlock = { [weak self] buffer, time in
-            self?.recorderQueue.async { [weak self] in
-                self?.bufferRecorded(buffer: buffer, time: time)
-            }
-        }
-        audioInputNode.installTap(onBus: inputBus, bufferSize: bufferSize, format: inputFormat, block: tapBlock)
-        engine.prepare()
-    }
-}
-
-extension AudioRecorderManager {
     // MARK: Stop Recording
     func stop() -> Single<Void> {
         Single.create { [weak self] observer in
@@ -258,7 +255,6 @@ extension AudioRecorderManager {
         publish(.soundCaptured(buffers: buffers))
         buffers.removeAll(keepingCapacity: true)
         audioInputNode.removeTap(onBus: inputBus)
-//        engine.stop()
         observer(.success(()))
         print("[AudioEngine]: Recording stopped.")
     }
@@ -272,42 +268,3 @@ extension AudioRecorderManager {
         case failed
     }
 }
-
-/*
-class AudioRecorder {
-    private let audioEngine = AVAudioEngine()
-    private let inputNode: AVAudioInputNode
-    private var audioBuffers = [AVAudioPCMBuffer]()
-    private let audioFormat: AVAudioFormat
-
-    init() {
-        inputNode = audioEngine.inputNode
-        audioFormat = inputNode.inputFormat(forBus: 0)
-    }
-
-    func startRecording() {
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] (buffer, when) in
-            guard let self = self else { return }
-            self.audioBuffers.append(buffer.copy() as! AVAudioPCMBuffer)
-        }
-
-        do {
-            try audioEngine.start()
-            print("Recording started")
-        } catch {
-            print("Error starting the audio engine: \(error.localizedDescription)")
-        }
-    }
-
-    func stopRecording() {
-        inputNode.removeTap(onBus: 0)
-        audioEngine.stop()
-        print("Recording stopped")
-    }
-
-    func getRecordedBuffers() -> [AVAudioPCMBuffer] {
-        return audioBuffers
-    }
-}
- */

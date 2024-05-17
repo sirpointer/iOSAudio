@@ -102,7 +102,7 @@ final class VirtualAssistantVM: ObservableObject {
         sampleRate: sampleRate,
         numberOfChannels: numberOfChannels,
         commonFormat: commonFormat,
-        targetChunkDuration: 0.6,
+        targetChunkDuration: 0.8,
         engine: engine
     )
 
@@ -112,8 +112,6 @@ final class VirtualAssistantVM: ObservableObject {
         commonFormat: commonFormat,
         engine: engine
     )
-
-    private var outputFile: AVAudioFile?
 
     private var buffers: [Buffer] = []
 
