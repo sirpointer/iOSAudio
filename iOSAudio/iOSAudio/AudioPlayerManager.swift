@@ -14,8 +14,7 @@ final class AudioPlayerManager {
     private var playerNode = AVAudioPlayerNode()
     private var converter = AVAudioConverter()
 
-    private let recorderQueue = DispatchQueue(label: "audioPlayerManager", qos: .default)
-    private lazy var scheduler = SerialDispatchQueueScheduler(queue: recorderQueue, internalSerialQueueName: recorderQueue.label)
+    private let playerQueue = DispatchQueue(label: "audioPlayerManager", qos: .default)
 
     private let outputBus: AVAudioNodeBus = 0
 
@@ -57,15 +56,20 @@ extension AudioPlayerManager {
 
     func setupPlayer() -> Single<Void> {
         Single.create { [weak self] observer in
-            do {
-                try self?.configurePlayer()
-                observer(.success(()))
-            } catch {
-                observer(.failure(error))
-            }
+            self?.setupPlayer(observer)
             return Disposables.create()
         }
-        .subscribe(on: scheduler)
+    }
+
+    func setupPlayer(_ callback: @escaping (Result<Void, Error>) -> Void) {
+        playerQueue.async { [weak self] in
+            do {
+                try self?.configurePlayer()
+                callback(.success(()))
+            } catch {
+                callback(.failure(error))
+            }
+        }
     }
 
     private func configurePlayer() throws {
@@ -86,16 +90,18 @@ extension AudioPlayerManager {
 
     func play(_ buffers: [AVAudioPCMBuffer]) -> Single<Void> {
         Single.create { [weak self] observer in
-            self?.playBuffers(buffers: buffers, observer: observer)
+            self?.play(buffers: buffers, callback: observer)
             return Disposables.create()
         }
-        .subscribe(on: scheduler)
     }
 
-    private func playBuffers(buffers: [AVAudioPCMBuffer], observer: @escaping (Result<Void, Error>) -> Void) {
-        let buffers = buffers.compactMap { convertBuffer($0) }
-        scheduleBuffers(buffers: buffers, observer: observer)
-        playerNode.play()
+    func play(buffers: [AVAudioPCMBuffer], callback: @escaping (Result<Void, Error>) -> Void) {
+        playerQueue.async { [weak self] in
+            guard let self else { return }
+            let buffers = buffers.compactMap { self.convertBuffer($0) }
+            scheduleBuffers(buffers: buffers, observer: callback)
+            playerNode.play()
+        }
     }
 
     private func scheduleBuffers(buffers: [AVAudioPCMBuffer], observer: @escaping (Result<Void, Error>) -> Void) {
@@ -103,7 +109,7 @@ extension AudioPlayerManager {
             let isLast = index == buffers.count - 1
             let callback = isLast ? { [weak self] in
                 observer(.success(()))
-                self?.recorderQueue.async { [weak self] in
+                self?.playerQueue.async { [weak self] in
                     self?.playerNode.stop()
                 }
             } : nil
@@ -113,11 +119,16 @@ extension AudioPlayerManager {
 
     func stop() -> Single<Void> {
         Single.create { [weak self] observer in
-            self?.playerNode.stop()
-            observer(.success(()))
+            self?.stop { observer(.success(())) }
             return Disposables.create()
         }
-        .subscribe(on: scheduler)
+    }
+
+    func stop(_ callback: @escaping () -> Void) {
+        playerQueue.async { [weak self] in
+            self?.playerNode.stop()
+            callback()
+        }
     }
 }
 

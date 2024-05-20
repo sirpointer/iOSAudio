@@ -49,7 +49,6 @@ final class AudioRecorderManager: NSObject {
     private var buffers: [Buffer] = []
 
     private let recorderQueue = DispatchQueue(label: "audioRecorderManager", qos: .default)
-    private lazy var scheduler = SerialDispatchQueueScheduler(queue: recorderQueue, internalSerialQueueName: recorderQueue.label)
 
     let sampleRate: Double
     let numberOfChannels: UInt32
@@ -76,23 +75,24 @@ final class AudioRecorderManager: NSObject {
     // MARK: Setup Recorder
     func setupRecorder() -> Single<Void> {
         Single.create { [weak self] observer in
-            self?.setupRecorder(observer: observer)
+            self?.setupRecorder(observer)
             return Disposables.create()
         }
-        .subscribe(on: scheduler)
     }
 
-    private func setupRecorder(observer: (Result<Void, Error>) -> Void) {
-        let inputFormat = audioInputNode.outputFormat(forBus: outputBus)
+    func setupRecorder(_ callback: @escaping (Result<Void, Error>) -> Void) {
+        recorderQueue.async { [weak self] in
+            guard let self else { return }
+            let inputFormat = audioInputNode.outputFormat(forBus: outputBus)
 
-        do {
-            try setupConverter(inputFormat: inputFormat)
-        } catch {
-            observer(.failure(error))
+            do {
+                try setupConverter(inputFormat: inputFormat)
+            } catch {
+                callback(.failure(error))
+            }
+            status = .ready
+            callback(.success(()))
         }
-        status = .ready
-        print("[AudioEngine]: Setup finished.")
-        observer(.success(()))
     }
 
     private func setupConverter(inputFormat: AVAudioFormat) throws {
@@ -105,10 +105,15 @@ final class AudioRecorderManager: NSObject {
     // MARK: Start
     func start() -> Single<Void> {
         Single.create { [weak self] observer in
-            self?.startRecording(observer: observer)
+            self?.start(observer)
             return Disposables.create()
         }
-        .subscribe(on: scheduler)
+    }
+
+    func start(_ callback: @escaping (Result<Void, Error>) -> Void) {
+        recorderQueue.async { [weak self] in
+            self?.startRecording(observer: callback)
+        }
     }
 
     private func startRecording(observer: @escaping (Result<Void, Error>) -> Void) {
@@ -245,18 +250,19 @@ final class AudioRecorderManager: NSObject {
     // MARK: Stop Recording
     func stop() -> Single<Void> {
         Single.create { [weak self] observer in
-            self?.stop(observer: observer)
+            self?.stop { observer(.success(())) }
             return Disposables.create()
         }
-        .subscribe(on: scheduler)
     }
 
-    private func stop(observer: (Result<Void, any Error>) -> Void) {
-        publish(.soundCaptured(buffers: buffers))
-        buffers.removeAll(keepingCapacity: true)
-        audioInputNode.removeTap(onBus: inputBus)
-        observer(.success(()))
-        print("[AudioEngine]: Recording stopped.")
+    func stop(_ callback: @escaping () -> Void) {
+        recorderQueue.async { [weak self] in
+            guard let self else { return }
+            publish(.soundCaptured(buffers: buffers))
+            buffers.removeAll(keepingCapacity: true)
+            audioInputNode.removeTap(onBus: inputBus)
+            callback()
+        }
     }
 }
 

@@ -116,7 +116,10 @@ final class VirtualAssistantVM: ObservableObject {
         engine: engine
     )
 
-    private var encoderManager = AudioEncoderManager()
+    private lazy var encoderManager = AudioEncoderManager(
+        sampleRate: sampleRate,
+        numberOfChannels: numberOfChannels
+    )
 
     private var buffers: [Buffer] = []
 
@@ -131,8 +134,6 @@ final class VirtualAssistantVM: ObservableObject {
     @Published private(set) var statusHistory: [HistoryNode] = []
 
     func configure() {
-        try? FileManager.default.removeItem(at: .recordingAVAudioFileURL)
-        try? FileManager.default.removeItem(at: .recordingExtAudioFileRefURL)
         audioConfigurationManager.configure()
             .subscribe(on: ConcurrentDispatchQueueScheduler(qos: .userInitiated))
             .observe(on: MainScheduler.asyncInstance)
@@ -236,6 +237,14 @@ final class VirtualAssistantVM: ObservableObject {
     func writeToFile() {
         try! encoderManager.writeFlacToFileWithAVAudioFile(buffers: buffers.map(\.buffer))
         try! encoderManager.writeFlacToFileWithExtAudioFileRef(buffers: buffers.map(\.buffer))
+        encoderManager.encodeToFlac(buffers.map(\.buffer))
+            .subscribe { data in
+                print(data.count)
+            } onFailure: { error in
+                print(error)
+            }
+            .disposed(by: disposeBag)
+
     }
 }
 
