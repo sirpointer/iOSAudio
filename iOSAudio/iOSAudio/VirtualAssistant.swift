@@ -121,6 +121,12 @@ final class VirtualAssistantVM: ObservableObject {
         numberOfChannels: numberOfChannels
     )
 
+    private lazy var decoderManager = AudioDecoderManager(
+        sampleRate: sampleRate,
+        numberOfChannels: numberOfChannels,
+        commonFormat: commonFormat
+    )
+
     private var buffers: [Buffer] = []
 
     @Published var configurationIsInProgress = true
@@ -235,16 +241,28 @@ final class VirtualAssistantVM: ObservableObject {
     }
 
     func writeToFile() {
-        try! encoderManager.writeFlacToFileWithAVAudioFile(buffers: buffers.map(\.buffer))
-        try! encoderManager.writeFlacToFileWithExtAudioFileRef(buffers: buffers.map(\.buffer))
         encoderManager.encodeToFlac(buffers.map(\.buffer))
-            .subscribe { data in
-                print(data.count)
-            } onFailure: { error in
-                print(error)
+            .observe(on: MainScheduler.asyncInstance)
+            .subscribe { [weak self] data in
+                self?.dataToBuffers(data: data)
+                self?.statusHistory.append(.init("Buffers converter to FLAC"))
+            } onFailure: { [weak self] error in
+                self?.statusHistory.append(.init(error.localizedDescription))
             }
             .disposed(by: disposeBag)
+    }
 
+    func dataToBuffers(data: Data) {
+        decoderManager.decodeFromFlac(data)
+            .observe(on: MainScheduler.asyncInstance)
+            .subscribe { [weak self] buffers in
+                self?.buffers.removeAll(keepingCapacity: true)
+                self?.buffers.append(contentsOf: buffers.map({ .init(buffer: $0, time: .init()) }))
+                self?.statusHistory.append(.init("FLAC converted to buffers"))
+            } onFailure: { [weak self] error in
+                self?.statusHistory.append(.init(error.localizedDescription))
+            }
+            .disposed(by: disposeBag)
     }
 }
 

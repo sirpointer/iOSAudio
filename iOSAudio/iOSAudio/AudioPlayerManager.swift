@@ -14,7 +14,7 @@ final class AudioPlayerManager {
     private var playerNode = AVAudioPlayerNode()
     private var converter = AVAudioConverter()
 
-    private let playerQueue = DispatchQueue(label: "audioPlayerManager", qos: .default)
+    private let playerQueue = DispatchQueue(label: "audioPlayerManager")
 
     private let outputBus: AVAudioNodeBus = 0
 
@@ -62,7 +62,7 @@ extension AudioPlayerManager {
     }
 
     func setupPlayer(_ callback: @escaping (Result<Void, Error>) -> Void) {
-        playerQueue.async { [weak self] in
+        AudioConfigurationManager.configurationQueue.async { [weak self] in
             do {
                 try self?.configurePlayer()
                 callback(.success(()))

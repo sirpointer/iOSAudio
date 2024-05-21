@@ -32,6 +32,7 @@ enum MicrophonePermission {
 
 final class AudioConfigurationManager {
     private let audioSession = AVAudioSession.sharedInstance()
+    static let configurationQueue = DispatchQueue(label: "AudioConfigurationQueue")
 
     func configure() -> Single<AudioConfigurationResult> {
         Single<AudioConfigurationResult>.create { [weak self] observer in
@@ -55,39 +56,5 @@ final class AudioConfigurationManager {
         } catch {
             observer(.failedToConfigure(error))
         }
-    }
-
-    private func setupInputRoute() throws {
-//        try? audioSession.setCategory(.playAndRecord, mode: .default, options: [.allowAirPlay, .allowBluetoothA2DP, .allowBluetooth])
-        let currentRoute: AVAudioSessionRouteDescription = audioSession.currentRoute
-        if currentRoute.outputs.count != 0 {
-            for portDescription in currentRoute.outputs {
-                if portDescription.portType == AVAudioSession.Port.headphones || portDescription.portType == AVAudioSession.Port.bluetoothA2DP {
-                    try audioSession.overrideOutputAudioPort(.none)
-                } else {
-                    try audioSession.overrideOutputAudioPort(.speaker)
-                }
-            }
-        } else {
-            try audioSession.overrideOutputAudioPort(.speaker)
-        }
-
-        if let availableInputs = audioSession.availableInputs {
-            var microphone: AVAudioSessionPortDescription? = nil
-
-            for inputDescription in availableInputs {
-                if inputDescription.portType == .headphones || inputDescription.portType == .bluetoothHFP {
-                    print("[AudioEngine]: \(inputDescription.portName) (\(inputDescription.portType.rawValue)) is selected as the input source. ")
-                    microphone = inputDescription
-                    break
-                }
-            }
-
-            if let microphone {
-                try audioSession.setPreferredInput(microphone)
-            }
-        }
-
-        print("[AudioEngine]: Audio session is active.")
     }
 }

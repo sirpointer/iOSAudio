@@ -48,7 +48,7 @@ final class AudioRecorderManager: NSObject {
 
     private var buffers: [Buffer] = []
 
-    private let recorderQueue = DispatchQueue(label: "audioRecorderManager", qos: .default)
+    private let recorderQueue = DispatchQueue(label: "audioRecorderManager")
 
     let sampleRate: Double
     let numberOfChannels: UInt32
@@ -81,7 +81,7 @@ final class AudioRecorderManager: NSObject {
     }
 
     func setupRecorder(_ callback: @escaping (Result<Void, Error>) -> Void) {
-        recorderQueue.async { [weak self] in
+        AudioConfigurationManager.configurationQueue.async { [weak self] in
             guard let self else { return }
             let inputFormat = audioInputNode.outputFormat(forBus: outputBus)
 
@@ -157,6 +157,7 @@ final class AudioRecorderManager: NSObject {
     // MARK: Buffer Recorded
     private func bufferRecorded(buffer: AVAudioPCMBuffer, time: AVAudioTime) {
         do {
+            print("Buffer Recorded ")
             let (status, outputBuffer, error) = try convert(buffer: buffer)
 
             switch status {

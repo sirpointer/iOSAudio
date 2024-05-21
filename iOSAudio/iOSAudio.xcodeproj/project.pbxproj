@@ -11,6 +11,7 @@
 		482556A12BDCD1AE00E79028 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 482556A02BDCD1AE00E79028 /* ContentView.swift */; };
 		482556A32BDCD1AF00E79028 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 482556A22BDCD1AF00E79028 /* Assets.xcassets */; };
 		482556A62BDCD1AF00E79028 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 482556A52BDCD1AF00E79028 /* Preview Assets.xcassets */; };
+		486E3AAE2BFC6D27003BA18D /* AudioDecoderManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 486E3AAD2BFC6D27003BA18D /* AudioDecoderManager.swift */; };
 		48B8636E2BDCF6D400C22D4D /* RxBlocking in Frameworks */ = {isa = PBXBuildFile; productRef = 48B8636D2BDCF6D400C22D4D /* RxBlocking */; };
 		48B863702BDCF6D400C22D4D /* RxCocoa in Frameworks */ = {isa = PBXBuildFile; productRef = 48B8636F2BDCF6D400C22D4D /* RxCocoa */; };
 		48B863722BDCF6D400C22D4D /* RxRelay in Frameworks */ = {isa = PBXBuildFile; productRef = 48B863712BDCF6D400C22D4D /* RxRelay */; };
@@ -28,6 +29,7 @@
 		482556A02BDCD1AE00E79028 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		482556A22BDCD1AF00E79028 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		482556A52BDCD1AF00E79028 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
+		486E3AAD2BFC6D27003BA18D /* AudioDecoderManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDecoderManager.swift; sourceTree = "<group>"; };
 		48B863772BDCF81F00C22D4D /* AudioConfigurationManager.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = AudioConfigurationManager.swift; sourceTree = "<group>"; };
 		48B863792BDCF83F00C22D4D /* VirtualAssistant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualAssistant.swift; sourceTree = "<group>"; };
 		48D61F5B2BF7501200770CA7 /* AudioEncoderManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEncoderManager.swift; sourceTree = "<group>"; };
@@ -78,6 +80,7 @@
 				48E8CAA42BE36D8E00049AE5 /* AudioRecorderManager.swift */,
 				48E8CAA62BE3AA0000049AE5 /* AudioPlayerManager.swift */,
 				48D61F5B2BF7501200770CA7 /* AudioEncoderManager.swift */,
+				486E3AAD2BFC6D27003BA18D /* AudioDecoderManager.swift */,
 			);
 			path = iOSAudio;
 			sourceTree = "<group>";
@@ -176,6 +179,7 @@
 				482556A12BDCD1AE00E79028 /* ContentView.swift in Sources */,
 				48B8637A2BDCF83F00C22D4D /* VirtualAssistant.swift in Sources */,
 				4825569F2BDCD1AE00E79028 /* iOSAudioApp.swift in Sources */,
+				486E3AAE2BFC6D27003BA18D /* AudioDecoderManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
