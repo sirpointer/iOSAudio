@@ -7,7 +7,7 @@
 
 import SwiftUI
 import RxSwift
-import AVFAudio
+import AVFoundation
 
 struct VirtualAssistant: View {
     @StateObject private var vm = VirtualAssistantVM()
@@ -99,7 +99,7 @@ final class VirtualAssistantVM: ObservableObject {
     private let numberOfChannels: UInt32 = 1
     private let commonFormat: AVAudioCommonFormat = .pcmFormatInt16
 
-    private let engine = AVAudioEngine()
+    private lazy var engine = AVAudioEngine()
     private let audioConfigurationManager = AudioConfigurationManager()
     private lazy var recorderManager = AudioRecorderManager(
         sampleRate: sampleRate,

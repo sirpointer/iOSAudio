@@ -41,20 +41,23 @@ final class AudioConfigurationManager {
         }
     }
 
-    private func configure(observer: @escaping (AudioConfigurationResult) -> Void) {
-        do {
-            try audioSession.setCategory(.playAndRecord, mode: .default)
-            try audioSession.setActive(true)
-            audioSession.requestRecordPermission { [weak audioSession] granted in
-                guard let audioSession else { return }
-                if granted {
-                    observer(.audioSessionConfigured)
-                } else {
-                    observer(.microphonePermissionDenied(.init(from: audioSession.recordPermission)))
+    func configure(_ callback: @escaping (AudioConfigurationResult) -> Void) {
+        Self.configurationQueue.async { [weak self] in
+            guard let self else { return }
+            do {
+                try audioSession.setCategory(.playAndRecord, mode: .default)
+                try audioSession.setActive(true)
+                audioSession.requestRecordPermission { [weak audioSession] granted in
+                    guard let audioSession else { return }
+                    if granted {
+                        callback(.audioSessionConfigured)
+                    } else {
+                        callback(.microphonePermissionDenied(.init(from: audioSession.recordPermission)))
+                    }
                 }
+            } catch {
+                callback(.failedToConfigure(error))
             }
-        } catch {
-            observer(.failedToConfigure(error))
         }
     }
 }
