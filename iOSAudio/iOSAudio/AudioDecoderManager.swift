@@ -87,7 +87,7 @@ final class AudioDecoderManager {
 
     func readFileToBuffers(url: URL, targetFrameCapacity: AVAudioFrameCount) throws -> [AVAudioPCMBuffer] {
         do {
-            let audioFile = try AVAudioFile(forReading: url, commonFormat: .pcmFormatInt16, interleaved: false)
+            let audioFile = try AVAudioFile(forReading: url, commonFormat: .pcmFormatInt16, interleaved: true)
             let totalFrames = AVAudioFrameCount(audioFile.length)
 
             var buffers: [AVAudioPCMBuffer] = []
@@ -125,7 +125,7 @@ final class AudioDecoderManager {
     }
 
     private func getConverter(inputFormat: AVAudioFormat) throws -> AVAudioConverter {
-        guard let outputFormat = AVAudioFormat(commonFormat: commonFormat, sampleRate: sampleRate, channels: numberOfChannels, interleaved: false) else {
+        guard let outputFormat = AVAudioFormat(commonFormat: commonFormat, sampleRate: sampleRate, channels: numberOfChannels, interleaved: true) else {
             throw AudioDecoderManagerError.incorrectConverterOutputFormat
         }
 

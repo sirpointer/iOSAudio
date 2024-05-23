@@ -44,9 +44,10 @@ final class AudioRecorderManager: NSObject {
 
     private let inputBus: AVAudioNodeBus = 0
     private let outputBus: AVAudioNodeBus = 0
-    private let bufferSize: AVAudioFrameCount = 8192
+    private let bufferSize: AVAudioFrameCount = 4096
 
     private var buffers: [Buffer] = []
+    private var skipFirstBuffer = true
 
     private let recorderQueue = DispatchQueue(label: "audioRecorderManager")
 
@@ -64,7 +65,7 @@ final class AudioRecorderManager: NSObject {
     private(set) var status: EngineStatus = .notInitialized
     private(set) var streamingInProgress: Bool = false
 
-    init(sampleRate: Double = 16000, numberOfChannels: UInt32 = 1, commonFormat: AVAudioCommonFormat = .pcmFormatInt16, targetChunkDuration: TimeInterval, engine: AVAudioEngine = AVAudioEngine()) {
+    init(sampleRate: Double, numberOfChannels: UInt32, commonFormat: AVAudioCommonFormat, targetChunkDuration: TimeInterval, engine: AVAudioEngine) {
         self.sampleRate = sampleRate
         self.numberOfChannels = numberOfChannels
         self.commonFormat = commonFormat
@@ -96,7 +97,7 @@ final class AudioRecorderManager: NSObject {
     }
 
     private func setupConverter(inputFormat: AVAudioFormat) throws {
-        guard let outputFormat = AVAudioFormat(commonFormat: commonFormat, sampleRate: sampleRate, channels: numberOfChannels, interleaved: false) else {
+        guard let outputFormat = AVAudioFormat(commonFormat: commonFormat, sampleRate: sampleRate, channels: numberOfChannels, interleaved: true) else {
             throw AudioRecorderManagerError.cannotCreateConverter
         }
         converter = AVAudioConverter(from: inputFormat, to: outputFormat)
@@ -130,7 +131,9 @@ final class AudioRecorderManager: NSObject {
         prepareEngine()
 
         do {
-            try engine.start()
+            if engine.isRunning {
+                try engine.start()
+            }
             status = .recording
         } catch {
             streamingInProgress = false
@@ -156,8 +159,13 @@ final class AudioRecorderManager: NSObject {
 
     // MARK: Buffer Recorded
     private func bufferRecorded(buffer: AVAudioPCMBuffer, time: AVAudioTime) {
+        guard !skipFirstBuffer else {
+            skipFirstBuffer = false
+            return
+        }
+
         do {
-            print("Buffer Recorded ")
+            print("Buffer Recorded , \(buffer.frameLength), \(buffer.duration) sec")
             let (status, outputBuffer, error) = try convert(buffer: buffer)
 
             switch status {
@@ -168,7 +176,7 @@ final class AudioRecorderManager: NSObject {
                     streamingInProgress = true
                     publish(.started)
                 }
-                print("[AudioEngine]: Buffer recorded, \(outputBuffer.frameLength), \(outputBuffer.duration) sec")
+                print("[AudioEngine]: Buffer converted, \(outputBuffer.frameLength), \(outputBuffer.duration) sec")
             case .error:
                 if let error {
                     streamingInProgress = false

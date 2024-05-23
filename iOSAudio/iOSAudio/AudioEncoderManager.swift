@@ -71,7 +71,7 @@ final class AudioEncoderManager {
             forWriting: url,
             settings: formatSettings,
             commonFormat: .pcmFormatInt16,
-            interleaved: false
+            interleaved: true
         )
 
         for buffer in buffers {

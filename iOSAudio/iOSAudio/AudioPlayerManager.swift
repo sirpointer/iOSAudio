@@ -22,7 +22,7 @@ final class AudioPlayerManager {
     let numberOfChannels: UInt32
     let commonFormat: AVAudioCommonFormat
 
-    init(sampleRate: Double = 16000, numberOfChannels: UInt32 = 1, commonFormat: AVAudioCommonFormat = .pcmFormatInt16, engine: AVAudioEngine = AVAudioEngine()) {
+    init(sampleRate: Double, numberOfChannels: UInt32, commonFormat: AVAudioCommonFormat, engine: AVAudioEngine) {
         self.sampleRate = sampleRate
         self.numberOfChannels = numberOfChannels
         self.commonFormat = commonFormat
@@ -73,7 +73,7 @@ extension AudioPlayerManager {
     }
 
     private func configurePlayer() throws {
-        guard let inputFormat = AVAudioFormat(commonFormat: commonFormat, sampleRate: sampleRate, channels: numberOfChannels, interleaved: false) else {
+        guard let inputFormat = AVAudioFormat(commonFormat: commonFormat, sampleRate: sampleRate, channels: numberOfChannels, interleaved: true) else {
             throw AudioPlayerManagerError.incorrectInputFormat
         }
         let outputFormat = engine.mainMixerNode.outputFormat(forBus: outputBus)
